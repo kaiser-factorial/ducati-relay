@@ -15,10 +15,10 @@
 //   Button 4 → GPIO 26  (sends CAN ID 0x103)
 //
 // Relay wiring (signal pin → relay module IN; relay module VCC/GND from 3.3V/GND):
-//   Relay 1 → GPIO 27  (follows Button 1)
-//   Relay 2 → GPIO 14  (follows Button 2)
-//   Relay 3 → GPIO 16  (follows Button 3)
-//   Relay 4 → GPIO 17  (follows Button 4)
+//   Relay 1 → GPIO 17  (follows Button 1)
+//   Relay 2 → GPIO 16  (follows Button 2)
+//   Relay 3 → GPIO 14  (follows Button 3)
+//   Relay 4 → GPIO 27  (follows Button 4)
 //
 // MCP2515 wiring (same VSPI pins as v1):
 //   VCC → 3.3V, GND → GND
@@ -54,10 +54,10 @@ struct Channel {
 };
 
 Channel channels[] = {
-  { "Ch1", 32, 27, 0x100, HIGH, false },
-  { "Ch2", 33, 14, 0x101, HIGH, false },
-  { "Ch3", 25, 16, 0x102, HIGH, false },
-  { "Ch4", 26, 17, 0x103, HIGH, false },
+  { "Ch1", 32, 17, 0x100, HIGH, false },
+  { "Ch2", 33, 16, 0x101, HIGH, false },
+  { "Ch3", 25, 14, 0x102, HIGH, false },
+  { "Ch4", 26, 27, 0x103, HIGH, false },
 };
 const int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 
