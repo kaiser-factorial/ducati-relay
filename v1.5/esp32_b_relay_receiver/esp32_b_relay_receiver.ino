@@ -193,13 +193,13 @@ void loop() {
       if (i == 0) firstByte = (uint8_t)b;
       Serial.printf("%s0x%02X", i > 0 ? " " : "", b);
     }
-    Serial.print("] + LED blink");
+    Serial.print("]");
 
     int chIdx = findChannel((uint32_t)id);
     if (chIdx >= 0) {
       packetsMatched++;
-      Serial.printf(" -> %s\n", channels[chIdx].name);
       bool on = (firstByte == 0x01);
+      Serial.printf(" -> %s relay %s + LED blink\n", channels[chIdx].name, on ? "ON " : "OFF");
       setRelay(channels[chIdx], on);
       blinkLed();
       if (channels[chIdx].txId) {

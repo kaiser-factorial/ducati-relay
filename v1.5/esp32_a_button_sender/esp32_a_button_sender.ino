@@ -127,9 +127,11 @@ void setup() {
 
 void onButtonChange(Channel &ch, bool pressed) {
   uint8_t payload = pressed ? 0x01 : 0x00;
-  Serial.printf("[%8lu ms] >>> %s: %s -> CAN 0x%03lX data=0x%02X (awaiting response)\n",
+  bool oneWay = (&ch == &channels[0]);
+  Serial.printf("[%8lu ms] >>> %s: %s -> CAN 0x%03lX data=0x%02X %s\n",
                 millis(), ch.name, pressed ? "PRESSED " : "RELEASED",
-                (unsigned long)ch.txId, payload);
+                (unsigned long)ch.txId, payload,
+                oneWay ? "(one-way)" : "(awaiting response)");
 
   mcp.beginPacket(ch.txId);
   mcp.write(payload);
