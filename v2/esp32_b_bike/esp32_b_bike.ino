@@ -21,10 +21,14 @@
 //     GPIO 25  Relay B4 — stereo / accessory power
 //
 // ── CAN IDs consumed ───────────────────────────────────────────────────────
-//   0x100  left turn signal  (from ESP-A) — 0x01=ON, 0x00=OFF
-//   0x101  right turn signal (from ESP-A) — 0x01=ON, 0x00=OFF
-//   0x102  stereo            (from ESP-A) — 0x01=ON, 0x00=OFF
-//   0x110  brake light       (from rusEFI ECU — placeholder; see ECU_BRAKE_CAN_ID)
+//   0x300  left turn signal  (from ESP-A) — 0x01=ON, 0x00=OFF
+//   0x301  right turn signal (from ESP-A) — 0x01=ON, 0x00=OFF
+//   0x302  stereo            (from ESP-A) — 0x01=ON, 0x00=OFF
+//   0x???  brake light       (from rusEFI ECU — see ECU_BRAKE_CAN_ID below)
+//
+//   NOTE: rusEFI uses 0x100/0x102 for TunerStudio-over-CAN and 0x200–0x20F
+//   for verbose telemetry broadcast. Our commands start at 0x300 to avoid all
+//   rusEFI native IDs.
 //
 // ── CAN IDs produced ───────────────────────────────────────────────────────
 //   0x160  ESP-B logical relay status bitmask (bits 0-3 = B1-B4)
@@ -68,10 +72,10 @@ struct RelayChannel {
 
 RelayChannel relays[] = {
   // name           pin  canId              enabled  flash       logical physical
-  { "B1-TurnLeft",  4,   0x100UL,           true,    FLASH_TURN, false,  false },
-  { "B2-TurnRight", 32,  0x101UL,           true,    FLASH_TURN, false,  false },
+  { "B1-TurnLeft",  4,   0x300UL,           true,    FLASH_TURN, false,  false },
+  { "B2-TurnRight", 32,  0x301UL,           true,    FLASH_TURN, false,  false },
   { "B3-Brake",     33,  ECU_BRAKE_CAN_ID,  false,   FLASH_NONE, false,  false },
-  { "B4-Stereo",    25,  0x102UL,           true,    FLASH_NONE, false,  false },
+  { "B4-Stereo",    25,  0x302UL,           true,    FLASH_NONE, false,  false },
 };
 const int NUM_RELAYS = sizeof(relays) / sizeof(relays[0]);
 

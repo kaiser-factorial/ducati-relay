@@ -219,21 +219,55 @@ wired directly to ESP-A, not a separate CAN node). Data sources ESP-A will consu
 
 ### CAN ID Plan
 
-The practice rig uses 0x100–0x102. For the bike, IDs need to be partitioned to avoid
-colliding with rusEFI's native broadcasts.
+The practice rig uses 0x100–0x102, but those IDs conflict with rusEFI — see below.
 
-**rusEFI CAN IDs:** check the rusEFI wiki / firmware source for the specific IDs used by the
-configured output channel set. Common rusEFI broadcast IDs are in the 0x600–0x6FF range
-(varies by firmware version and configuration).
+**Confirmed rusEFI native IDs (do not use):**
 
-Proposed ID allocation (to be confirmed against rusEFI config):
-
-| Range | Owner | Purpose |
+| ID(s) | Owner | Purpose |
 |-------|-------|---------|
-| 0x100–0x12F | ESP-A | Button/command messages (consumed by ESP-B) |
-| 0x130–0x15F | ESP-A | Status broadcasts (consumed by ESP-A itself for display) |
-| 0x160–0x18F | ESP-B | Status broadcasts (consumed by ESP-A for display) |
-| 0x600–0x6FF | rusEFI | ECU telemetry (reserved — **do not use**, confirm actual range) |
+| 0x100, 0x102 | rusEFI | TunerStudio-over-CAN (active during tuning sessions) |
+| 0x190 | rusEFI | Wideband O2 (WBO) sensor communication |
+| 0x200–0x20B+ | rusEFI | Verbose telemetry broadcast (see section below) |
+| 0x667 | rusEFI | OpenBLT bootloader TX |
+| 0x7E1 | rusEFI | OpenBLT bootloader RX |
+
+**Custom ID allocation:**
+
+| ID | Owner | Purpose |
+|----|-------|---------|
+| 0x130 | ESP-A | Relay status broadcast (1-byte bitmask, bits 0–3 = A1–A4) |
+| 0x160 | ESP-B | Relay logical status broadcast (1-byte bitmask, bits 0–3 = B1–B4) |
+| 0x300 | ESP-A | Left turn signal command → ESP-B (0x01=ON, 0x00=OFF) |
+| 0x301 | ESP-A | Right turn signal command → ESP-B (0x01=ON, 0x00=OFF) |
+| 0x302 | ESP-A | Stereo command → ESP-B (0x01=ON, 0x00=OFF) |
+
+### rusEFI Verbose CAN Broadcast
+
+rusEFI broadcasts a rich telemetry stream when "CAN broadcast" is enabled in TunerStudio.
+The base address defaults to **0x200** and is configurable via `verboseCanBaseAddress` —
+verify the friend's ECU setting before relying on these IDs.
+
+All multi-byte values are **little-endian**. Payloads are 8 bytes each.
+
+| CAN ID | Name | Signal | Bytes | Decode |
+|--------|------|--------|-------|--------|
+| 0x200 | BASE0 | Gear | 5 | `buf[5]` → gear number |
+| | | Status flags | 0–4 | rev limit, fuel pump, CEL, fans, etc. |
+| 0x201 | BASE1 | **RPM** | 0–1 | `(buf[1]<<8)\|buf[0]` → RPM |
+| | | Vehicle speed | 6 | kph |
+| 0x202 | BASE2 | **TPS1** | 2–3 | `((buf[3]<<8)\|buf[2]) × 0.01` → % |
+| 0x203 | BASE3 | **Coolant temp** | 2 | `buf[2] − 40` → °C |
+| | | Intake temp | 3 | `buf[3] − 40` → °C |
+| 0x204 | BASE4 | **Battery voltage** | 6–7 | `((buf[7]<<8)\|buf[6]) × 0.001` → V |
+
+BASE5–BASE11 carry EGT, knock, lambda, cam timing, and other channels not needed
+for the dashboard. The full signal definitions are in
+[`rusEFI_CAN_verbose.dbc`](https://github.com/rusefi/rusefi/blob/master/firmware/controllers/can/rusEFI_CAN_verbose.dbc)
+in the rusEFI repo.
+
+> **Brake light via ECU:** The brake lever sensor signal reaches the ECU but its CAN
+> broadcast ID is not in BASE0–BASE4. It likely requires either a custom Lua script on the
+> ECU or locating the signal in BASE5+. This is still TBD — see Open Questions.
 
 ---
 
@@ -243,22 +277,26 @@ Proposed ID allocation (to be confirmed against rusEFI config):
 
 - [ ] **CAN baud rate**: rusEFI defaults to 500 kbps (matches our practice rig) but confirm
       this matches the actual ECU configuration before flashing anything.
-- [ ] **rusEFI CAN ID map**: which IDs does the ECU broadcast on, and which IDs does it
-      listen to? We must avoid collisions. Check the rusEFI wiki and/or the `.ini` / tuning
-      config on the friend's ECU — the actual IDs vary by firmware version and output channel
-      setup. Common range is 0x600–0x6FF but do not assume.
+- [x] **rusEFI CAN ID map**: confirmed — telemetry on 0x200–0x204 (verbose CAN, base
+      configurable), TunerStudio over CAN on 0x100/0x102, WBO on 0x190. Custom IDs moved
+      to 0x300–0x302 to avoid all conflicts. Verify `verboseCanBaseAddress` in the friend's
+      TunerStudio config is the default 0x200.
 - [ ] **Starter interlock logic**: does the ECU or ESP-A need to verify a safety condition
-      (e.g. neutral gear signal, clutch lever) before sending the start command? Cranking
-      without an interlock is a safety hazard.
+      (e.g. neutral gear signal, clutch lever) before sending the start command? Current
+      firmware only checks ignition ON. Cranking without a proper interlock is a safety hazard.
+- [ ] **Brake light CAN ID**: the brake lever sensor signal is received by the ECU but its
+      CAN broadcast ID is not in the standard BASE0–BASE4 messages. Determine whether rusEFI
+      broadcasts it in BASE5+ or whether a Lua script on the ECU is needed. Until resolved,
+      the B3-Brake relay on ESP-B is disabled in firmware.
 
 ### Still to confirm with friend
 
 - [ ] **Exact relay assignments**: which physical circuits on the Ducati does each relay
       switch, and what are the safe switching voltages/currents?
-- [ ] **Turn signal flash pattern**: hardware (RC timer on relay) or software (ESP-B times
-      the flash loop in firmware)?
+- [x] **Turn signal flash pattern**: implemented in software — ESP-B flashes at 500ms
+      half-period (~60 BPM) while logical state is ON. No hardware RC timer needed.
 - [ ] **Dashboard display type**: what hardware is the front display? (e.g. SPI/I2C OLED or
-      TFT, dedicated CAN gauge module, etc.)
+      TFT, dedicated CAN gauge module, etc.) Blocks display rendering code in ESP-A.
 - [ ] **rusEFI termination resistor**: does the ECU board have a built-in 120Ω termination
       that can be enabled? If yes, only one external resistor is needed (at the far physical
       end of the cable run, which will be one of the ESPs).
@@ -271,13 +309,15 @@ Proposed ID allocation (to be confirmed against rusEFI config):
 
 ```
 ducati_relay/
-├── SPEC.md                              ← this file
-├── esp32_a_button_sender/
-│   └── esp32_a_button_sender.ino        ← practice rig: 3-button CAN sender
-└── esp32_b_relay_receiver/
-    └── esp32_b_relay_receiver.ino       ← practice rig: 3-relay CAN receiver + status LED
+├── SPEC.md
+├── v1/
+│   ├── esp32_a_button_sender/
+│   │   └── esp32_a_button_sender.ino    ← practice rig: 3-button CAN sender
+│   └── esp32_b_relay_receiver/
+│       └── esp32_b_relay_receiver.ino  ← practice rig: 3-relay CAN receiver + status LED
+└── v2/
+    ├── esp32_a_bike/
+    │   └── esp32_a_bike.ino            ← bike: 7 buttons, 4 front relays, ECU telemetry rx
+    └── esp32_b_bike/
+        └── esp32_b_bike.ino            ← bike: 4 rear relays, turn-signal flash, status tx
 ```
-
-Future sketches for the bike integration will live in new subdirectories (e.g.,
-`esp32_a_bike/`, `esp32_b_bike/`) to keep the validated practice rig untouched as a
-reference.

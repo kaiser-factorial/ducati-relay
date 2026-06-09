@@ -27,12 +27,21 @@
 //     GPIO 16  Relay A4 — headlight high beam
 //
 // ── CAN IDs ────────────────────────────────────────────────────────────────
-//   Sent   0x100  left turn signal command  (0x01=ON, 0x00=OFF) → ESP-B
-//          0x101  right turn signal command (0x01=ON, 0x00=OFF) → ESP-B
-//          0x102  stereo command            (0x01=ON, 0x00=OFF) → ESP-B
+//   Sent   0x300  left turn signal command  (0x01=ON, 0x00=OFF) → ESP-B
+//          0x301  right turn signal command (0x01=ON, 0x00=OFF) → ESP-B
+//          0x302  stereo command            (0x01=ON, 0x00=OFF) → ESP-B
 //          0x130  ESP-A relay status bitmask (bits 0-3 = A1-A4)
-//   Heard  0x160  ESP-B relay logical status (logged; reserved for display)
-//          0x6xx  rusEFI ECU telemetry (TODO: parse once IDs are confirmed)
+//   Heard  0x160  ESP-B relay logical status
+//          0x200  rusEFI BASE0: status flags + gear (byte 5)
+//          0x201  rusEFI BASE1: RPM (bytes 0-1, uint16 LE)
+//          0x202  rusEFI BASE2: TPS (bytes 2-3, uint16 LE, ×0.01 = %)
+//          0x203  rusEFI BASE3: coolant temp (byte 2, raw−40 = °C)
+//          0x204  rusEFI BASE4: battery voltage (bytes 6-7, uint16 LE, ×0.001 = V)
+//
+//   NOTE: rusEFI uses 0x100 and 0x102 for TunerStudio-over-CAN — do NOT use
+//   those IDs. Our commands start at 0x300 to stay clear of all rusEFI IDs.
+//   The verbose CAN base (default 0x200) is configurable via verboseCanBaseAddress
+//   in TunerStudio; verify the friend's setting before flashing.
 
 #include <Adafruit_MCP2515.h>
 
@@ -48,11 +57,22 @@
 // #define MCP2515_CRYSTAL_8MHZ
 
 // ── CAN IDs ───────────────────────────────────────────────────────────────
-#define CAN_ID_TURN_LEFT    0x100UL
-#define CAN_ID_TURN_RIGHT   0x101UL
-#define CAN_ID_STEREO       0x102UL
+// Custom command IDs (ESP-A → ESP-B). Start at 0x300 to avoid rusEFI's
+// TunerStudio-over-CAN IDs at 0x100/0x102 and verbose broadcast at 0x200-0x20F.
+#define CAN_ID_TURN_LEFT    0x300UL
+#define CAN_ID_TURN_RIGHT   0x301UL
+#define CAN_ID_STEREO       0x302UL
 #define CAN_ID_ESP_A_STATUS 0x130UL
 #define CAN_ID_ESP_B_STATUS 0x160UL
+
+// rusEFI verbose CAN broadcast IDs (base 0x200, configurable via verboseCanBaseAddress).
+// All payloads are little-endian. Enable "CAN broadcast" in TunerStudio.
+#define ECU_BASE       0x200UL
+#define ECU_ID_STATUS  (ECU_BASE + 0)  // 0x200: status flags (byte 4), gear (byte 5)
+#define ECU_ID_RPM     (ECU_BASE + 1)  // 0x201: RPM bytes 0-1 (uint16, scale ×1)
+#define ECU_ID_TPS     (ECU_BASE + 2)  // 0x202: TPS1 bytes 2-3 (uint16, ×0.01 = %)
+#define ECU_ID_TEMPS   (ECU_BASE + 3)  // 0x203: coolant byte 2 (raw−40 = °C)
+#define ECU_ID_POWER   (ECU_BASE + 4)  // 0x204: battery bytes 6-7 (uint16, ×0.001 = V)
 
 // ── Front relay table ─────────────────────────────────────────────────────
 struct LocalRelay {
@@ -111,6 +131,17 @@ Button buttons[] = {
   { "Stereo",       22,  TOGGLE,    TARGET_CAN,    2,   HIGH },
 };
 const int NUM_BUTTONS = sizeof(buttons) / sizeof(buttons[0]);
+
+// ── ECU telemetry cache ───────────────────────────────────────────────────
+struct EcuTelemetry {
+  uint16_t rpm;       // from 0x201
+  float    tps;       // from 0x202, percent
+  int      coolantC;  // from 0x203, °C
+  float    battV;     // from 0x204, volts
+  uint8_t  gear;      // from 0x200
+  bool     valid;     // true once at least one ECU packet has been received
+};
+EcuTelemetry ecu = {};
 
 // ── Globals ───────────────────────────────────────────────────────────────
 Adafruit_MCP2515 mcp(CS_PIN);
@@ -211,10 +242,31 @@ void handleIncoming() {
   if (id == CAN_ID_ESP_B_STATUS) {
     espBStatus = buf[0];
     Serial.printf("[%8lu ms] ESP-B status 0x%02X\n", millis(), espBStatus);
+
+  } else if (id == ECU_ID_RPM && len >= 2) {
+    ecu.rpm   = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+    ecu.valid = true;
+    // TODO: push ecu.rpm to display
+
+  } else if (id == ECU_ID_TPS && len >= 4) {
+    uint16_t raw = (uint16_t)buf[2] | ((uint16_t)buf[3] << 8);
+    ecu.tps = raw * 0.01f;
+    // TODO: push ecu.tps to display
+
+  } else if (id == ECU_ID_TEMPS && len >= 3) {
+    ecu.coolantC = (int)buf[2] - 40;
+    // TODO: push ecu.coolantC to display
+
+  } else if (id == ECU_ID_POWER && len >= 8) {
+    uint16_t raw = (uint16_t)buf[6] | ((uint16_t)buf[7] << 8);
+    ecu.battV = raw * 0.001f;
+    // TODO: push ecu.battV to display
+
+  } else if (id == ECU_ID_STATUS && len >= 6) {
+    ecu.gear = buf[5];
+    // TODO: push ecu.gear to display
+
   } else {
-    // TODO: parse rusEFI ECU telemetry (RPM, TPS, coolant temp, battery, gear)
-    //       once the actual CAN IDs are confirmed from the rusEFI .ini config.
-    //       Expected range: 0x600–0x6FF (verify against the friend's ECU setup).
     Serial.printf("[%8lu ms] RX id=0x%03lX len=%d (unhandled)\n", millis(), id, len);
   }
 }
@@ -292,6 +344,12 @@ void loop() {
     }
     for (int i = 0; i < NUM_CAN_CMDS; i++) {
       Serial.printf("  %s=%s (cmd)\n", canCmds[i].name, canCmds[i].isOn ? "ON" : "off");
+    }
+    if (ecu.valid) {
+      Serial.printf("  ECU: RPM=%u  TPS=%.1f%%  coolant=%d°C  batt=%.2fV  gear=%u\n",
+                    ecu.rpm, ecu.tps, ecu.coolantC, ecu.battV, ecu.gear);
+    } else {
+      Serial.println("  ECU: no data yet (check verboseCanBaseAddress in TunerStudio)");
     }
   }
 }
