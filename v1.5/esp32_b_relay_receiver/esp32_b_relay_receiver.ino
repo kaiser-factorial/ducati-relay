@@ -47,7 +47,7 @@
 
 #define BUZZER_PIN           13
 #define BUZZER_FREQ_HZ       1000
-#define BUZZER_DURATION_MS   80
+#define BUZZER_DURATION_MS   3000
 
 #define BRAKE_PIN            26
 #define CAN_ID_BRAKE         0x110   // ESP-B broadcasts brake state here
