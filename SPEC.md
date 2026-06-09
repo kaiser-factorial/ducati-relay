@@ -1,0 +1,283 @@
+# Ducati Relay — Project Spec
+
+## Overview
+
+This project adds a custom CAN bus control layer to a friend's **Ducati Scrambler 800** running a
+[rusEFI](https://rusefi.com) aftermarket ECU (**microRusEFI v6**). Two ESP32 microcontrollers (with MCP2515 SPI CAN
+controller modules) sit on the same CAN bus as the ECU, allowing button-driven relay control
+of bike functions. ESP-A (front) aggregates data from all nodes and drives a front dashboard
+display.
+
+---
+
+## Why We're Building This
+
+The friend's Ducati has a rusEFI ECU that exposes a CAN bus. The goal is to extend that bus
+with custom hardware to:
+
+1. **Control** bike functions (ignition, starter, lights, turn signals, stereo, brake light)
+   via physical buttons wired to the ESPs.
+2. **Display** real-time telemetry on a front dashboard, driven by ESP-A which listens to
+   all nodes on the bus (ECU telemetry + ESP-B status broadcasts).
+
+This gives a clean, modular wiring architecture that doesn't hack the stock harness directly —
+all switching happens through relays that the ESPs drive over CAN.
+
+---
+
+## Phase 1: Practice Rig (COMPLETE)
+
+Before touching the bike, we built and validated a full CAN-bus + relay circuit on the bench.
+
+### Hardware
+
+| Component | Count | Notes |
+|-----------|-------|-------|
+| ESP32 DevKit v1 | 2 | "ESP-A" (sender) and "ESP-B" (receiver) |
+| MCP2515 SPI CAN controller module | 2 | One per ESP; default 16MHz crystal |
+| 5-pin relay modules | 3 | On ESP-B; active-HIGH (`RELAY_ACTIVE_LOW false`) |
+| Tactile pushbuttons | 3 | On ESP-A; internal pull-up, connect pin → GND when pressed |
+| 120Ω resistors | 2 | CAN termination, one at each end of the bus |
+
+### Wiring
+
+**MCP2515 → ESP32 (both boards, same VSPI pins):**
+
+| MCP2515 pin | ESP32 GPIO |
+|-------------|-----------|
+| SCK | 18 |
+| MISO (SO) | 19 |
+| MOSI (SI) | 23 |
+| CS | 5 |
+| VCC | 3.3V |
+| GND | GND |
+
+**ESP-A buttons (INPUT_PULLUP; press connects pin to GND):**
+
+| Button | GPIO |
+|--------|------|
+| Button 1 | 27 |
+| Button 2 | 25 |
+| Button 3 | 26 |
+
+**ESP-B relay outputs:**
+
+| Relay | GPIO | CAN ID |
+|-------|------|--------|
+| Relay 1 | 4 | 0x100 |
+| Relay 2 | 32 | 0x101 |
+| Relay 3 | 33 | 0x102 |
+
+> **Note:** GPIO 2 on ESP-B is reserved for the onboard status LED (see below). Relay 1 is on
+> GPIO 4, not GPIO 2. If the signal wire for Relay 1 is ever moved back to GPIO 2 by mistake,
+> the relay won't activate even though the software state will appear correct.
+
+**CAN bus:**
+
+```
+[ESP-A MCP2515] ─── CAN_H / CAN_L ─── [ESP-B MCP2515]
+    [120Ω]                                  [120Ω]
+```
+
+Common GND must be shared between ESP-A GND and ESP-B GND (run a wire between them).
+Load-side ground (battery negative) is isolated on the relay's switched side.
+
+### CAN Protocol (practice rig)
+
+- **Baud rate:** 500 kbps
+- **Frame type:** standard (11-bit ID)
+- **Payload:** 1 byte — `0x01` = pressed/ON, `0x00` = released/OFF
+
+| CAN ID | Meaning |
+|--------|---------|
+| 0x100 | Button 1 / Relay 1 |
+| 0x101 | Button 2 / Relay 2 |
+| 0x102 | Button 3 / Relay 3 |
+
+### ESP-B Status LED
+
+GPIO 2 (onboard LED) reflects the active relay state since it's a single-color LED:
+
+| State | Pattern |
+|-------|---------|
+| No relay active | Off |
+| Relay 1 active | Solid on |
+| Relay 2 active | Slow flash (500ms half-period) |
+| Relay 3 active | Rapid flash (100ms half-period) |
+
+Lowest-numbered active relay wins if multiple are on. Pattern is updated non-blockingly in
+`loop()` using `millis()`-based timing — no `delay()` used.
+
+### Firmware
+
+- **Library:** Adafruit MCP2515 (`arduino-cli lib install "Adafruit MCP2515"`)
+- **Board target:** `esp32:esp32:esp32`
+- **Serial baud:** 115200
+- Both sketches include heavy debug logging: boot banner, register dump, per-event logs,
+  2-second heartbeat with running packet counts.
+
+**Sketch locations:**
+
+```
+ducati_relay/
+├── esp32_a_button_sender/
+│   └── esp32_a_button_sender.ino
+└── esp32_b_relay_receiver/
+    └── esp32_b_relay_receiver.ino
+```
+
+### Key Lessons Learned
+
+- **Termination resistors are mandatory.** Without 120Ω at both ends, CAN_H/CAN_L will read
+  ~24kΩ (open) instead of ~60Ω and no packets will be received. Add one resistor bridging
+  CAN_H and CAN_L at each transceiver module.
+- **Common ground between nodes is required.** CAN is differential but the transceivers need
+  a shared voltage reference.
+- **MCP2515 crystal frequency matters.** The Adafruit library defaults to 16MHz. If the
+  oscillator on your module is marked 8MHz, call `mcp.setClockFrequency(8e6)` before
+  `mcp.begin()` (toggle via `#define MCP2515_CRYSTAL_8MHZ` at the top of each sketch).
+- **GPIO 2 is the onboard LED on most ESP32 DevKit boards.** Driving it as a relay output
+  produces unexpected LED behavior. Use GPIO 4 (or any other free GPIO) for relay signals.
+- **Relay coil inrush can brownout the ESP32** if the board isn't externally powered. Make sure
+  the power supply (battery or bench supply) is on before testing relay activation.
+
+---
+
+## Target Architecture (Real Bike)
+
+### Topology
+
+```
+[Display]
+    |
+[ESP-A] ────────── [rusEFI ECU] ────────── [ESP-B]
+ (front)        single shared CAN bus        (rear)
+ [120Ω]                                     [120Ω]
+```
+
+All three nodes share **one CAN bus** (CAN_H / CAN_L, 120Ω termination at each physical end).
+ESP-A is at the front of the bike and drives the dashboard display directly (wired to ESP-A,
+not a separate CAN node). ESP-A listens to all traffic on the bus — ECU telemetry and ESP-B
+status — and pushes relevant data to the display.
+
+### Node Roles
+
+| Node | Physical location | Role |
+|------|------------------|------|
+| ESP-A | Front of bike / handlebars | Reads rider input buttons; sends CAN commands; drives front relays; listens to all CAN traffic and drives front dashboard display |
+| microRusEFI v6 ECU | Engine bay | Engine management; broadcasts telemetry (RPM, TPS, coolant temp, etc.); receives brake sensor input and relays it over CAN |
+| ESP-B | Rear of bike | Receives CAN commands from ESP-A; drives rear relays; broadcasts rear status |
+
+### Planned Functions
+
+#### Rider inputs → CAN commands (ESP-A sends)
+
+| Function | Type | Notes |
+|----------|------|-------|
+| Bike power (ignition on/off) | Button | Latching or momentary TBD |
+| Motor start | Button | Momentary; likely needs interlock (neutral/clutch) |
+| Headlight high beam | Button | Toggle or hold TBD |
+| Headlight low beam | Button | Toggle or hold TBD |
+| Left turn signal | Button | Standard flash pattern |
+| Right turn signal | Button | Standard flash pattern |
+| Stereo on/off | Button | |
+| Brake light | — | Brake lever sensor → ECU → CAN → ESP-B relay (not button-driven) |
+
+> Total buttons: 7–8 shown above. More may be added. GPIO availability on ESP32 is not a
+> bottleneck — there are plenty of free input-capable pins.
+
+#### Relay outputs
+
+**ESP-A (front):**
+
+| Relay | Switches |
+|-------|----------|
+| Relay A1 | Ignition / bike power rail |
+| Relay A2 | Starter motor circuit |
+| Relay A3 | Headlight low beam |
+| Relay A4 | Headlight high beam |
+
+**ESP-B (rear):**
+
+| Relay | Switches |
+|-------|----------|
+| Relay B1 | Left turn signal |
+| Relay B2 | Right turn signal |
+| Relay B3 | Brake light |
+| Relay B4 | Stereo / accessory power |
+
+> Exact relay-to-GPIO pin mapping and final relay count TBD pending confirmation from friend.
+
+#### Dashboard data (ESP-A as aggregator)
+
+ESP-A listens to all CAN traffic and pushes data to the front dashboard display (display is
+wired directly to ESP-A, not a separate CAN node). Data sources ESP-A will consume:
+
+- rusEFI: RPM, throttle position, coolant temperature, battery voltage, gear position
+- ESP-B: active relay states, any rear sensor data it broadcasts
+- ESP-A itself: active button states, ignition state
+
+### CAN ID Plan
+
+The practice rig uses 0x100–0x102. For the bike, IDs need to be partitioned to avoid
+colliding with rusEFI's native broadcasts.
+
+**rusEFI CAN IDs:** check the rusEFI wiki / firmware source for the specific IDs used by the
+configured output channel set. Common rusEFI broadcast IDs are in the 0x600–0x6FF range
+(varies by firmware version and configuration).
+
+Proposed ID allocation (to be confirmed against rusEFI config):
+
+| Range | Owner | Purpose |
+|-------|-------|---------|
+| 0x100–0x12F | ESP-A | Button/command messages (consumed by ESP-B) |
+| 0x130–0x15F | ESP-A | Status broadcasts (consumed by ESP-A itself for display) |
+| 0x160–0x18F | ESP-B | Status broadcasts (consumed by ESP-A for display) |
+| 0x600–0x6FF | rusEFI | ECU telemetry (reserved — **do not use**, confirm actual range) |
+
+---
+
+## Open Questions / TBD
+
+### Must confirm before writing bike firmware
+
+- [ ] **CAN baud rate**: rusEFI defaults to 500 kbps (matches our practice rig) but confirm
+      this matches the actual ECU configuration before flashing anything.
+- [ ] **rusEFI CAN ID map**: which IDs does the ECU broadcast on, and which IDs does it
+      listen to? We must avoid collisions. Check the rusEFI wiki and/or the `.ini` / tuning
+      config on the friend's ECU — the actual IDs vary by firmware version and output channel
+      setup. Common range is 0x600–0x6FF but do not assume.
+- [ ] **Starter interlock logic**: does the ECU or ESP-A need to verify a safety condition
+      (e.g. neutral gear signal, clutch lever) before sending the start command? Cranking
+      without an interlock is a safety hazard.
+
+### Still to confirm with friend
+
+- [ ] **Exact relay assignments**: which physical circuits on the Ducati does each relay
+      switch, and what are the safe switching voltages/currents?
+- [ ] **Turn signal flash pattern**: hardware (RC timer on relay) or software (ESP-B times
+      the flash loop in firmware)?
+- [ ] **Dashboard display type**: what hardware is the front display? (e.g. SPI/I2C OLED or
+      TFT, dedicated CAN gauge module, etc.)
+- [ ] **rusEFI termination resistor**: does the ECU board have a built-in 120Ω termination
+      that can be enabled? If yes, only one external resistor is needed (at the far physical
+      end of the cable run, which will be one of the ESPs).
+- [ ] **Physical routing / cable run order**: which node is at each end of the harness?
+      (Determines which two nodes get the 120Ω termination resistors.)
+
+---
+
+## Repository Layout
+
+```
+ducati_relay/
+├── SPEC.md                              ← this file
+├── esp32_a_button_sender/
+│   └── esp32_a_button_sender.ino        ← practice rig: 3-button CAN sender
+└── esp32_b_relay_receiver/
+    └── esp32_b_relay_receiver.ino       ← practice rig: 3-relay CAN receiver + status LED
+```
+
+Future sketches for the bike integration will live in new subdirectories (e.g.,
+`esp32_a_bike/`, `esp32_b_bike/`) to keep the validated practice rig untouched as a
+reference.
