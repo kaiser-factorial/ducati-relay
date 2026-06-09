@@ -8,10 +8,10 @@
 //
 // Button wiring (one leg → GPIO, other leg → GND; internal pull-up, no external
 // resistor needed):
-//   Button 1 → GPIO 27  (sends CAN ID 0x100)
-//   Button 2 → GPIO 25  (sends CAN ID 0x101)
-//   Button 3 → GPIO 26  (sends CAN ID 0x102)
-//   Button 4 → GPIO 14  (sends CAN ID 0x103)
+//   Button 1 → GPIO 32  (sends CAN ID 0x100)
+//   Button 2 → GPIO 33  (sends CAN ID 0x101)
+//   Button 3 → GPIO 25  (sends CAN ID 0x102)
+//   Button 4 → GPIO 26  (sends CAN ID 0x103)
 //
 // MCP2515 wiring (same VSPI pins as v1):
 //   VCC → 3.3V, GND → GND
@@ -40,10 +40,10 @@ struct ButtonChannel {
 };
 
 ButtonChannel channels[] = {
-  { "Button 1", 27, 0x100, HIGH },
-  { "Button 2", 25, 0x101, HIGH },
-  { "Button 3", 26, 0x102, HIGH },
-  { "Button 4", 14, 0x103, HIGH },
+  { "Button 1", 32, 0x100, HIGH },
+  { "Button 2", 33, 0x101, HIGH },
+  { "Button 3", 25, 0x102, HIGH },
+  { "Button 4", 26, 0x103, HIGH },
 };
 const int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 
