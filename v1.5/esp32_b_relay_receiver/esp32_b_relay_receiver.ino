@@ -26,6 +26,10 @@
 //   Relay 4 active → ultra flash  (50 ms half-period)
 //   None active    → off
 //
+// Passive piezo buzzer wiring:
+//   Signal → GPIO 13, + → 3.3V (or 5V), − → GND
+//   Beeps once per relay ON event; each relay has a distinct pitch.
+//
 // NOTE: many cheap relay modules are "active LOW". If relays turn on when
 // they should be off, flip RELAY_ACTIVE_LOW to true.
 //
@@ -40,6 +44,9 @@
 
 #define STATUS_LED_PIN         2
 #define STATUS_LED_ACTIVE_LOW  false
+
+#define BUZZER_PIN           13
+#define BUZZER_DURATION_MS   80
 
 #define BRAKE_PIN            26
 #define CAN_ID_BRAKE         0x110   // ESP-B broadcasts brake state here
@@ -64,6 +71,7 @@ RelayChannel channels[] = {
 const int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 
 const unsigned long LED_HALF_PERIOD_MS[] = { 0, 500, 100, 50 };
+const uint32_t      RELAY_BEEP_HZ[]      = { 880, 1047, 1319, 1568 }; // A5, C6, E6, G6
 
 unsigned long lastHeartbeat  = 0;
 unsigned long packetsSeen    = 0;
@@ -79,6 +87,10 @@ void setRelay(RelayChannel &ch, bool on) {
   Serial.printf("[%8lu ms]     >>> %s -> %s (pin %d %s)\n",
                 millis(), ch.name, on ? "ON " : "OFF",
                 ch.pin, level ? "HIGH" : "LOW");
+  if (on) {
+    int chIdx = &ch - channels;
+    tone(BUZZER_PIN, RELAY_BEEP_HZ[chIdx], BUZZER_DURATION_MS);
+  }
 }
 
 void writeStatusLed(bool lit) {
@@ -153,6 +165,12 @@ void setup() {
   pinMode(STATUS_LED_PIN, OUTPUT);
   writeStatusLed(false);
   Serial.printf("  Status LED: pin=%d\n", STATUS_LED_PIN);
+
+  pinMode(BUZZER_PIN, OUTPUT);
+  Serial.printf("  Buzzer: pin=%d  pitches(Hz)=%u/%u/%u/%u\n",
+                BUZZER_PIN,
+                RELAY_BEEP_HZ[0], RELAY_BEEP_HZ[1],
+                RELAY_BEEP_HZ[2], RELAY_BEEP_HZ[3]);
 
   pinMode(BRAKE_PIN, INPUT_PULLUP);
   brakeLastState = digitalRead(BRAKE_PIN);
