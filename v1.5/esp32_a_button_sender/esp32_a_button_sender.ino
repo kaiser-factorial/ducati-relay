@@ -1,7 +1,8 @@
-// ESP32 "A" v1.5 — reads FOUR pushbuttons and broadcasts each one's state over
-// CAN via an MCP2515 SPI CAN controller module (Adafruit MCP2515 library).
-// Also listens for CAN 0x110, the potentiometer-selection broadcast from ESP-B,
-// and logs which relay ESP-B is currently pointing at with its pot.
+// ESP32 "A" v1.5 — reads FOUR pushbuttons, drives a local relay per button,
+// and broadcasts each button's state over CAN via an MCP2515 SPI CAN controller
+// module (Adafruit MCP2515 library). Also listens for CAN 0x110, the
+// potentiometer-selection broadcast from ESP-B, and logs which relay ESP-B is
+// currently pointing at with its pot.
 //
 // Library: install "Adafruit MCP2515" via Arduino Library Manager
 // (arduino-cli lib install "Adafruit MCP2515")
@@ -13,9 +14,19 @@
 //   Button 3 → GPIO 25  (sends CAN ID 0x102)
 //   Button 4 → GPIO 26  (sends CAN ID 0x103)
 //
+// Relay wiring (signal pin → relay module IN; relay module VCC/GND from 3.3V/GND):
+//   Relay 1 → GPIO 27  (follows Button 1)
+//   Relay 2 → GPIO 14  (follows Button 2)
+//   Relay 3 → GPIO 16  (follows Button 3)
+//   Relay 4 → GPIO 17  (follows Button 4)
+//
 // MCP2515 wiring (same VSPI pins as v1):
 //   VCC → 3.3V, GND → GND
 //   SCK → GPIO 18, MISO → GPIO 19, MOSI → GPIO 23, CS → GPIO 5
+//
+// NOTE: many cheap relay modules are "active LOW" (energize when signal is LOW).
+// If relays turn on when buttons are released instead of pressed, flip
+// RELAY_ACTIVE_LOW to true.
 //
 // IMPORTANT: library assumes a 16 MHz crystal on the MCP2515 by default.
 // If your module's oscillator can is marked 8 MHz, uncomment MCP2515_CRYSTAL_8MHZ.
@@ -24,6 +35,7 @@
 
 #define CS_PIN              5
 #define CAN_BAUDRATE        500000
+#define RELAY_ACTIVE_LOW    false
 #define HEARTBEAT_PERIOD_MS 2000
 
 #define CAN_ID_POT_SELECT   0x110   // ESP-B broadcasts its pot-selected relay here
@@ -32,25 +44,33 @@
 
 Adafruit_MCP2515 mcp(CS_PIN);
 
-struct ButtonChannel {
+struct Channel {
   const char *name;
-  uint8_t     pin;
+  uint8_t     btnPin;
+  uint8_t     relayPin;
   uint32_t    canId;
-  bool        lastState;
+  bool        lastBtnState;
+  bool        relayOn;
 };
 
-ButtonChannel channels[] = {
-  { "Button 1", 32, 0x100, HIGH },
-  { "Button 2", 33, 0x101, HIGH },
-  { "Button 3", 25, 0x102, HIGH },
-  { "Button 4", 26, 0x103, HIGH },
+Channel channels[] = {
+  { "Ch1", 32, 27, 0x100, HIGH, false },
+  { "Ch2", 33, 14, 0x101, HIGH, false },
+  { "Ch3", 25, 16, 0x102, HIGH, false },
+  { "Ch4", 26, 17, 0x103, HIGH, false },
 };
 const int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 
-unsigned long lastHeartbeat   = 0;
-unsigned long sendCount       = 0;
-unsigned long sendFailCount   = 0;
-int8_t        lastPotRelay    = -1;  // last pot-selected relay index received from ESP-B (-1=none)
+unsigned long lastHeartbeat = 0;
+unsigned long sendCount     = 0;
+unsigned long sendFailCount = 0;
+int8_t        lastPotRelay  = -1;
+
+void setRelay(Channel &ch, bool on) {
+  ch.relayOn = on;
+  bool level = RELAY_ACTIVE_LOW ? !on : on;
+  digitalWrite(ch.relayPin, level ? HIGH : LOW);
+}
 
 void setup() {
   Serial.begin(115200);
@@ -60,13 +80,17 @@ void setup() {
   Serial.println("==========================================");
   Serial.println("ESP32 A v1.5 — CAN button sender booting");
   Serial.println("==========================================");
-  Serial.printf("CS_PIN=%d  CAN_BAUDRATE=%ld\n", CS_PIN, (long)CAN_BAUDRATE);
+  Serial.printf("CS_PIN=%d  CAN_BAUDRATE=%ld  RELAY_ACTIVE_LOW=%s\n",
+                CS_PIN, (long)CAN_BAUDRATE, RELAY_ACTIVE_LOW ? "true" : "false");
 
   for (int i = 0; i < NUM_CHANNELS; i++) {
-    pinMode(channels[i].pin, INPUT_PULLUP);
-    Serial.printf("  %s: pin=%d  canId=0x%lX  initial=%s\n",
-                  channels[i].name, channels[i].pin, (unsigned long)channels[i].canId,
-                  digitalRead(channels[i].pin) == LOW ? "LOW (pressed)" : "HIGH (released)");
+    pinMode(channels[i].btnPin, INPUT_PULLUP);
+    pinMode(channels[i].relayPin, OUTPUT);
+    setRelay(channels[i], false);
+    Serial.printf("  %s: btn=GPIO%d  relay=GPIO%d  canId=0x%lX  btn=%s\n",
+                  channels[i].name, channels[i].btnPin, channels[i].relayPin,
+                  (unsigned long)channels[i].canId,
+                  digitalRead(channels[i].btnPin) == LOW ? "LOW (pressed)" : "HIGH (released)");
   }
 
 #ifdef MCP2515_CRYSTAL_8MHZ
@@ -88,16 +112,17 @@ void setup() {
   mcp.dumpRegisters(Serial);
   Serial.println("-----------------------------");
 
-  Serial.println("Ready. Press/release buttons to send CAN; watching for 0x110 from ESP-B.");
+  Serial.println("Ready. Buttons drive local relays + send CAN; watching 0x110 from ESP-B.");
   Serial.println();
 }
 
-void sendButtonState(ButtonChannel &ch, bool pressed) {
-  uint8_t payload = pressed ? 0x01 : 0x00;
+void onButtonChange(Channel &ch, bool pressed) {
+  setRelay(ch, pressed);
 
-  Serial.printf("[%8lu ms] >>> %s: %s -> id=0x%lX data=0x%02X\n",
+  uint8_t payload = pressed ? 0x01 : 0x00;
+  Serial.printf("[%8lu ms] >>> %s: %s -> relay %s, CAN 0x%lX data=0x%02X\n",
                 millis(), ch.name, pressed ? "PRESSED " : "RELEASED",
-                (unsigned long)ch.canId, payload);
+                pressed ? "ON " : "OFF", (unsigned long)ch.canId, payload);
 
   mcp.beginPacket(ch.canId);
   mcp.write(payload);
@@ -114,16 +139,16 @@ void sendButtonState(ButtonChannel &ch, bool pressed) {
 }
 
 void loop() {
-  // --- Poll buttons and send on change ---
+  // --- Poll buttons ---
   for (int i = 0; i < NUM_CHANNELS; i++) {
-    ButtonChannel &ch = channels[i];
-    bool cur = digitalRead(ch.pin);
-    if (cur != ch.lastState) {
+    Channel &ch = channels[i];
+    bool cur = digitalRead(ch.btnPin);
+    if (cur != ch.lastBtnState) {
       delay(30); // debounce
-      cur = digitalRead(ch.pin);
-      if (cur != ch.lastState) {
-        sendButtonState(ch, cur == LOW);
-        ch.lastState = cur;
+      cur = digitalRead(ch.btnPin);
+      if (cur != ch.lastBtnState) {
+        ch.lastBtnState = cur;
+        onButtonChange(ch, cur == LOW);
       }
     }
   }
@@ -142,7 +167,7 @@ void loop() {
       int8_t relayIndex = (int8_t)firstByte;  // 0-3
       if (relayIndex != lastPotRelay) {
         lastPotRelay = relayIndex;
-        Serial.printf("[%8lu ms] POT from ESP-B: relay %d selected (Relay %d)\n",
+        Serial.printf("[%8lu ms] POT from ESP-B: relay %d selected (Ch%d)\n",
                       millis(), relayIndex, relayIndex + 1);
       }
     } else {
@@ -153,13 +178,14 @@ void loop() {
   // --- Heartbeat ---
   if (millis() - lastHeartbeat >= HEARTBEAT_PERIOD_MS) {
     lastHeartbeat = millis();
-    Serial.printf("[%8lu ms] heartbeat — sends ok: %lu | failed: %lu | pot-selected relay: %s | ",
+    Serial.printf("[%8lu ms] heartbeat — sends ok: %lu | failed: %lu | pot relay: %s |",
                   millis(), sendCount - sendFailCount, sendFailCount,
                   lastPotRelay >= 0 ? String(lastPotRelay + 1).c_str() : "none");
     for (int i = 0; i < NUM_CHANNELS; i++) {
-      Serial.printf("%s=%s%s", channels[i].name,
-                    digitalRead(channels[i].pin) == LOW ? "LOW " : "HIGH",
-                    i < NUM_CHANNELS - 1 ? ", " : "");
+      Serial.printf(" %s btn=%s relay=%s",
+                    channels[i].name,
+                    digitalRead(channels[i].btnPin) == LOW ? "LOW " : "HIGH",
+                    channels[i].relayOn ? "ON " : "OFF");
     }
     Serial.println();
   }
