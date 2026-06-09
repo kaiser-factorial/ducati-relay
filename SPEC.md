@@ -119,7 +119,7 @@ Lowest-numbered active relay wins if multiple are on. Pattern is updated non-blo
 **Sketch locations:**
 
 ```
-ducati_relay/
+ducati_relay/v1/
 ├── esp32_a_button_sender/
 │   └── esp32_a_button_sender.ino
 └── esp32_b_relay_receiver/
@@ -143,7 +143,7 @@ ducati_relay/
 
 ---
 
-## Target Architecture (Real Bike)
+## Phase 2: Bike Firmware (IN PROGRESS)
 
 ### Topology
 
@@ -168,45 +168,49 @@ status — and pushes relevant data to the display.
 | microRusEFI v6 ECU | Engine bay | Engine management; broadcasts telemetry (RPM, TPS, coolant temp, etc.); receives brake sensor input and relays it over CAN |
 | ESP-B | Rear of bike | Receives CAN commands from ESP-A; drives rear relays; broadcasts rear status |
 
-### Planned Functions
+### Implemented Functions
 
-#### Rider inputs → CAN commands (ESP-A sends)
+#### ESP-A buttons and outputs
 
-| Function | Type | Notes |
-|----------|------|-------|
-| Bike power (ignition on/off) | Button | Latching or momentary TBD |
-| Motor start | Button | Momentary; likely needs interlock (neutral/clutch) |
-| Headlight high beam | Button | Toggle or hold TBD |
-| Headlight low beam | Button | Toggle or hold TBD |
-| Left turn signal | Button | Standard flash pattern |
-| Right turn signal | Button | Standard flash pattern |
-| Stereo on/off | Button | |
-| Brake light | — | Brake lever sensor → ECU → CAN → ESP-B relay (not button-driven) |
+ESP-A reads 7 buttons. Four control local front relays directly; three send CAN commands
+to ESP-B. Pressing the power button while outputs are active cancels all relays and CAN
+commands (ignition-off cascade).
 
-> Total buttons: 7–8 shown above. More may be added. GPIO availability on ESP32 is not a
-> bottleneck — there are plenty of free input-capable pins.
+| Button | GPIO | Behavior | Controls |
+|--------|------|----------|----------|
+| Power | 27 | Toggle | Relay A1 (ignition). Turning OFF cascades: cancels all other relays and CAN commands. |
+| Starter | 25 | Momentary (hold to crank) | Relay A2 (starter). Blocked if ignition relay is OFF. |
+| Headlight low beam | 26 | Toggle | Relay A3 |
+| Headlight high beam | 14 | Toggle | Relay A4 |
+| Left turn signal | 13 | Toggle | CAN 0x300 → ESP-B. Cancels right turn if active. |
+| Right turn signal | 17 | Toggle | CAN 0x301 → ESP-B. Cancels left turn if active. |
+| Stereo | 22 | Toggle | CAN 0x302 → ESP-B |
 
-#### Relay outputs
+**ESP-A front relay GPIO assignments:**
 
-**ESP-A (front):**
+| Relay | GPIO | Switches |
+|-------|------|----------|
+| A1 | 4 | Ignition / bike power rail |
+| A2 | 32 | Starter motor circuit |
+| A3 | 33 | Headlight low beam |
+| A4 | 16 | Headlight high beam |
 
-| Relay | Switches |
-|-------|----------|
-| Relay A1 | Ignition / bike power rail |
-| Relay A2 | Starter motor circuit |
-| Relay A3 | Headlight low beam |
-| Relay A4 | Headlight high beam |
+> GPIO confirmation with friend still required before flashing to the actual bike.
 
-**ESP-B (rear):**
+#### ESP-B relay outputs
 
-| Relay | Switches |
-|-------|----------|
-| Relay B1 | Left turn signal |
-| Relay B2 | Right turn signal |
-| Relay B3 | Brake light |
-| Relay B4 | Stereo / accessory power |
+ESP-B receives CAN commands from ESP-A and drives 4 rear relays. Turn signals flash at
+~60 BPM (500 ms half-period) in firmware. Brake light relay is wired up but disabled in
+firmware until the ECU broadcast CAN ID is confirmed.
 
-> Exact relay-to-GPIO pin mapping and final relay count TBD pending confirmation from friend.
+| Relay | GPIO | CAN ID | Switches | Flash |
+|-------|------|--------|----------|-------|
+| B1 | 4 | 0x300 | Left turn signal | Yes — 500ms half-period |
+| B2 | 32 | 0x301 | Right turn signal | Yes — 500ms half-period |
+| B3 | 33 | TBD (ECU) | Brake light | No |
+| B4 | 25 | 0x302 | Stereo / accessory power | No |
+
+> GPIO confirmation with friend still required before flashing to the actual bike.
 
 #### Dashboard data (ESP-A as aggregator)
 
