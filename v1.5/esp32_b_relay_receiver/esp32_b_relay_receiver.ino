@@ -46,6 +46,7 @@
 #define STATUS_LED_ACTIVE_LOW  false
 
 #define BUZZER_PIN           13
+#define BUZZER_FREQ_HZ       1000
 #define BUZZER_DURATION_MS   80
 
 #define BRAKE_PIN            26
@@ -71,7 +72,6 @@ RelayChannel channels[] = {
 const int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 
 const unsigned long LED_HALF_PERIOD_MS[] = { 0, 500, 100, 50 };
-const uint32_t      RELAY_BEEP_HZ[]      = { 880, 1047, 1319, 1568 }; // A5, C6, E6, G6
 
 unsigned long lastHeartbeat  = 0;
 unsigned long packetsSeen    = 0;
@@ -88,8 +88,7 @@ void setRelay(RelayChannel &ch, bool on) {
                 millis(), ch.name, on ? "ON " : "OFF",
                 ch.pin, level ? "HIGH" : "LOW");
   if (on) {
-    int chIdx = &ch - channels;
-    tone(BUZZER_PIN, RELAY_BEEP_HZ[chIdx], BUZZER_DURATION_MS);
+    tone(BUZZER_PIN, BUZZER_FREQ_HZ, BUZZER_DURATION_MS);
   }
 }
 
@@ -167,10 +166,8 @@ void setup() {
   Serial.printf("  Status LED: pin=%d\n", STATUS_LED_PIN);
 
   pinMode(BUZZER_PIN, OUTPUT);
-  Serial.printf("  Buzzer: pin=%d  pitches(Hz)=%u/%u/%u/%u\n",
-                BUZZER_PIN,
-                RELAY_BEEP_HZ[0], RELAY_BEEP_HZ[1],
-                RELAY_BEEP_HZ[2], RELAY_BEEP_HZ[3]);
+  Serial.printf("  Buzzer: pin=%d  freq=%d Hz  duration=%d ms\n",
+                BUZZER_PIN, BUZZER_FREQ_HZ, BUZZER_DURATION_MS);
 
   pinMode(BRAKE_PIN, INPUT_PULLUP);
   brakeLastState = digitalRead(BRAKE_PIN);
