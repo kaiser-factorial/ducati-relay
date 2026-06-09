@@ -152,7 +152,7 @@ void loop() {
     }
   }
 
-  // --- Receive CAN frames (pot selection from ESP-B) ---
+  // --- Receive CAN frames (brake state from ESP-B) ---
   int packetSize = mcp.parsePacket();
   if (packetSize > 0) {
     long id = mcp.packetId();
