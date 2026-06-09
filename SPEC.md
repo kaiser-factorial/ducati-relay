@@ -428,14 +428,14 @@ plugging in if unsure which port is the board.
 ### Compile
 
 ```bash
-arduino-cli compile --fqbn esp32:esp32:esp32 v1.5/esp32_a_button_sender
-arduino-cli compile --fqbn esp32:esp32:esp32 v1.5/esp32_b_relay_receiver
+arduino-cli compile --fqbn esp32:esp32:esp32 v1.5/esp_a_front
+arduino-cli compile --fqbn esp32:esp32:esp32 v1.5/esp_b_back
 ```
 
 ### Upload
 
 ```bash
-arduino-cli upload -p /dev/cu.usbserial-XXXX --fqbn esp32:esp32:esp32 v1.5/esp32_a_button_sender
+arduino-cli upload -p /dev/cu.usbserial-XXXX --fqbn esp32:esp32:esp32 v1.5/esp_a_front
 ```
 
 ### Monitor serial output
@@ -451,7 +451,7 @@ per-event logs, and a 2-second heartbeat.
 
 ```bash
 arduino-cli compile --fqbn esp32:esp32:esp32 v1.5/esp32_a_button_sender && \
-arduino-cli upload -p /dev/cu.usbserial-XXXX --fqbn esp32:esp32:esp32 v1.5/esp32_a_button_sender
+arduino-cli upload -p /dev/cu.usbserial-XXXX --fqbn esp32:esp32:esp32 v1.5/esp_a_front
 ```
 
 > **Note:** The FQBN `esp32:esp32:esp32` targets the standard 30-pin ESP32 DevKit v1. If
@@ -470,10 +470,10 @@ ducati_relay/
 │   └── esp32_b_relay_receiver/
 │       └── esp32_b_relay_receiver.ino  ← practice rig: 3-relay CAN receiver + status LED
 ├── v1.5/
-│   ├── esp32_a_button_sender/
-│   │   └── esp32_a_button_sender.ino   ← 4 buttons; relays fire on CAN response from ESP-B
-│   └── esp32_b_relay_receiver/
-│       └── esp32_b_relay_receiver.ino  ← 4 relays + push button + piezo buzzer; request/response CAN
+│   ├── esp_a_front/
+│   │   └── esp_a_front.ino             ← 4 buttons; relays fire on CAN response from ESP-B
+│   └── esp_b_back/
+│       └── esp_b_back.ino              ← 4 relays + push button + piezo buzzer; request/response CAN
 ├── relay_wiring_front.svg              ← ESP-A relay load wiring diagram
 ├── relay_wiring_rear.svg               ← ESP-B relay load wiring diagram
 └── v2/
