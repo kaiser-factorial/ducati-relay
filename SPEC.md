@@ -143,6 +143,79 @@ ducati_relay/v1/
 
 ---
 
+## Phase 1.5: Extended Practice Rig
+
+Builds on v1. Both boards gain a 4th relay channel. ESP-A gains 4 local relay outputs (one
+per button, fired directly on press in addition to sending the CAN command to ESP-B). ESP-B
+gains a potentiometer whose position selects which relay is locally active and broadcasts
+the selection over CAN 0x110 to ESP-A. A relay on ESP-B is active if the CAN button command
+says ON **or** the pot is currently pointing at it — both controls work simultaneously.
+
+### CAN Protocol (v1.5)
+
+| CAN ID | Direction | Meaning |
+|--------|-----------|---------|
+| 0x100 | ESP-A → ESP-B | Button/Relay 1 (0x01=ON, 0x00=OFF) |
+| 0x101 | ESP-A → ESP-B | Button/Relay 2 |
+| 0x102 | ESP-A → ESP-B | Button/Relay 3 |
+| 0x103 | ESP-A → ESP-B | Button/Relay 4 |
+| 0x110 | ESP-B → ESP-A | Pot selection (1 byte = relay index 0–3) |
+
+### Board Pin Mapping
+
+Pin order matches the physical ESP32 DevKit v1 header, top → bottom on each side.
+*Italics* on an unused pin indicate a hardware constraint worth knowing.
+
+**Left header:**
+
+| # | Pin | ESP-A v1.5 | ESP-B v1.5 |
+|---|-----|------------|------------|
+| 1 | 3V3 | MCP2515 VCC | MCP2515 VCC |
+| 2 | EN | — | — |
+| 3 | GPIO 36 (SVP) | — *input only* | — *input only* |
+| 4 | GPIO 39 (SVN) | — *input only* | — *input only* |
+| 5 | GPIO 34 | — *input only, no internal pull-up* | potentiometer wiper *input only, no internal pull-up* |
+| 6 | GPIO 35 | — *input only, no internal pull-up* | — *input only, no internal pull-up* |
+| 7 | GPIO 32 | Button 1 | Relay 2 (CAN 0x101) |
+| 8 | GPIO 33 | Button 2 | Relay 3 (CAN 0x102) |
+| 9 | GPIO 25 | Button 3 | Relay 4 (CAN 0x103) |
+| 10 | GPIO 26 | Button 4 | — |
+| 11 | GPIO 27 | Relay 1 | — |
+| 12 | GPIO 14 | Relay 2 | — |
+| 13 | GPIO 12 | — *strapping — HIGH at boot = 1.8V flash voltage* | — *strapping — HIGH at boot = 1.8V flash voltage* |
+| 14 | GND | common GND | common GND |
+| 15 | GPIO 13 | — | — |
+| 16 | GPIO 9 (SD2) | — *internal flash — do not use* | — *internal flash — do not use* |
+| 17 | GPIO 10 (SD3) | — *internal flash — do not use* | — *internal flash — do not use* |
+| 18 | GPIO 11 (CMD) | — *internal flash — do not use* | — *internal flash — do not use* |
+| 19 | 5V | — | — |
+
+**Right header:**
+
+| # | Pin | ESP-A v1.5 | ESP-B v1.5 |
+|---|-----|------------|------------|
+| 1 | GND | common GND | common GND |
+| 2 | GPIO 23 | MCP2515 MOSI | MCP2515 MOSI |
+| 3 | GPIO 22 | — | — |
+| 4 | GPIO 1 (TX) | — *UART0 TX; used by Serial* | — *UART0 TX; used by Serial* |
+| 5 | GPIO 3 (RX) | — *UART0 RX; used by Serial* | — *UART0 RX; used by Serial* |
+| 6 | GPIO 21 | — | — |
+| 7 | GND | — | — |
+| 8 | GPIO 19 | MCP2515 MISO | MCP2515 MISO |
+| 9 | GPIO 18 | MCP2515 SCK | MCP2515 SCK |
+| 10 | GPIO 5 | MCP2515 CS | MCP2515 CS |
+| 11 | GPIO 17 | Relay 4 | — |
+| 12 | GPIO 16 | Relay 3 | — |
+| 13 | GPIO 4 | — | Relay 1 (CAN 0x100) |
+| 14 | GPIO 0 | — *strapping — LOW at boot = download mode* | — *strapping — LOW at boot = download mode* |
+| 15 | GPIO 2 | — *strapping pin + onboard LED* | status LED *strapping pin + onboard LED* |
+| 16 | GPIO 15 | — *strapping — LOW at boot silences UART log* | — *strapping — LOW at boot silences UART log* |
+| 17 | GPIO 8 (SD1) | — *internal flash — do not use* | — *internal flash — do not use* |
+| 18 | GPIO 7 (SD0) | — *internal flash — do not use* | — *internal flash — do not use* |
+| 19 | GPIO 6 (CLK) | — *internal flash — do not use* | — *internal flash — do not use* |
+
+---
+
 ## Phase 2: Bike Firmware (IN PROGRESS)
 
 ### Topology
@@ -319,6 +392,11 @@ ducati_relay/
 │   │   └── esp32_a_button_sender.ino    ← practice rig: 3-button CAN sender
 │   └── esp32_b_relay_receiver/
 │       └── esp32_b_relay_receiver.ino  ← practice rig: 3-relay CAN receiver + status LED
+├── v1.5/
+│   ├── esp32_a_button_sender/
+│   │   └── esp32_a_button_sender.ino   ← 4 buttons + 4 local relays; CAN sender + pot rx
+│   └── esp32_b_relay_receiver/
+│       └── esp32_b_relay_receiver.ino  ← 4 relays + potentiometer selector; CAN rx + pot tx
 └── v2/
     ├── esp32_a_bike/
     │   └── esp32_a_bike.ino            ← bike: 7 buttons, 4 front relays, ECU telemetry rx
