@@ -13,10 +13,10 @@
 // (arduino-cli lib install "Adafruit MCP2515")
 //
 // Relay wiring (signal → relay IN; relay VCC/GND from 3.3V/GND):
-//   Relay 1: GPIO 4   (CAN 0x100, one-way — no response)
-//   Relay 2: GPIO 32  (CAN 0x101, responds with CAN 0x111)
-//   Relay 3: GPIO 33  (CAN 0x102, responds with CAN 0x112)
-//   Relay 4: GPIO 25  (CAN 0x103, responds with CAN 0x113)
+//   Relay 1: GPIO 17  (CAN 0x100, one-way — no response)
+//   Relay 2: GPIO 16  (CAN 0x101, responds with CAN 0x111)
+//   Relay 3: GPIO 14  (CAN 0x102, responds with CAN 0x112)
+//   Relay 4: GPIO 27  (CAN 0x103, responds with CAN 0x113)
 //
 // Push button wiring (one leg → GPIO 26, other leg → GND; INPUT_PULLUP):
 //   Sends CAN 0x110: 0x01 = pressed, 0x00 = released.
@@ -65,10 +65,10 @@ struct RelayChannel {
 };
 
 RelayChannel channels[] = {
-  { "Relay 1", 4,  0x100, 0x000, false },
-  { "Relay 2", 32, 0x101, 0x111, false },
-  { "Relay 3", 33, 0x102, 0x112, false },
-  { "Relay 4", 25, 0x103, 0x113, false },
+  { "Relay 1", 17, 0x100, 0x000, false },
+  { "Relay 2", 16, 0x101, 0x111, false },
+  { "Relay 3", 14, 0x102, 0x112, false },
+  { "Relay 4", 27, 0x103, 0x113, false },
 };
 const int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 
@@ -155,6 +155,9 @@ void setup() {
   Serial.println("Calling mcp.begin() ...");
   if (!mcp.begin(CAN_BAUDRATE)) {
     Serial.println("!!! mcp.begin() FAILED — check wiring / MCP2515_CRYSTAL_8MHZ.");
+    Serial.println("--- MCP2515 Register Dump ---");
+    mcp.dumpRegisters(Serial);
+    Serial.println("-----------------------------");
     while (1) delay(10);
   }
   Serial.println("mcp.begin() succeeded.");

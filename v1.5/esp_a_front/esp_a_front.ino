@@ -117,6 +117,9 @@ void setup() {
   Serial.println("Calling mcp.begin() ...");
   if (!mcp.begin(CAN_BAUDRATE)) {
     Serial.println("!!! mcp.begin() FAILED — check wiring / MCP2515_CRYSTAL_8MHZ.");
+    Serial.println("--- MCP2515 Register Dump ---");
+    mcp.dumpRegisters(Serial);
+    Serial.println("-----------------------------");
     while (1) delay(10);
   }
   Serial.println("mcp.begin() succeeded.");

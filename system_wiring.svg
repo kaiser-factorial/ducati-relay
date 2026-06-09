@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" font-family="'Courier New', monospace">
+  <!-- Background -->
+  <rect width="1000" height="560" fill="#1a1e2e"/>
+
+  <!-- Title -->
+  <text x="500" y="35" text-anchor="middle" font-size="18" font-weight="bold" fill="#cdd6f4">Ducati Relay System v1.5 — Full Wiring Diagram</text>
+
+  <!-- ================= BOARD A (FRONT) ================= -->
+  <!-- ESP32-A -->
+  <rect x="160" y="80" width="140" height="440" rx="6" fill="#162844" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="230" y="105" text-anchor="middle" font-size="14" fill="#3b82f6" font-weight="bold">ESP32 (Board A)</text>
+  <text x="230" y="120" text-anchor="middle" font-size="10" fill="#93c5fd">Front</text>
+
+  <!-- MCP2515-A -->
+  <rect x="360" y="130" width="80" height="200" rx="4" fill="#1e1e2e" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="400" y="150" text-anchor="middle" font-size="12" fill="#f59e0b" font-weight="bold">MCP2515</text>
+
+  <!-- Buttons Block A -->
+  <rect x="20" y="100" width="100" height="160" rx="4" fill="#1f2937" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="70" y="120" text-anchor="middle" font-size="11" fill="#d1d5db" font-weight="bold">Push Buttons</text>
+  <text x="70" y="135" text-anchor="middle" font-size="9" fill="#9ca3af">(To GND)</text>
+  
+  <!-- Relays Block A -->
+  <rect x="20" y="300" width="100" height="160" rx="4" fill="#1a3a1a" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="70" y="320" text-anchor="middle" font-size="11" fill="#4ade80" font-weight="bold">Relay Module</text>
+
+  <!-- Buttons Lines A -->
+  <!-- Btn 1 -->
+  <line x1="120" y1="160" x2="160" y2="160" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="115" y="163" text-anchor="end" font-size="10" fill="#9ca3af">Btn 1</text>
+  <text x="165" y="163" text-anchor="start" font-size="10" fill="#93c5fd">32</text>
+  <!-- Btn 2 -->
+  <line x1="120" y1="190" x2="160" y2="190" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="115" y="193" text-anchor="end" font-size="10" fill="#9ca3af">Btn 2</text>
+  <text x="165" y="193" text-anchor="start" font-size="10" fill="#93c5fd">33</text>
+  <!-- Btn 3 -->
+  <line x1="120" y1="220" x2="160" y2="220" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="115" y="223" text-anchor="end" font-size="10" fill="#9ca3af">Btn 3</text>
+  <text x="165" y="223" text-anchor="start" font-size="10" fill="#93c5fd">25</text>
+  <!-- Btn 4 -->
+  <line x1="120" y1="250" x2="160" y2="250" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="115" y="253" text-anchor="end" font-size="10" fill="#9ca3af">Btn 4</text>
+  <text x="165" y="253" text-anchor="start" font-size="10" fill="#93c5fd">26</text>
+
+  <!-- Relays Lines A -->
+  <!-- RLY 1 -->
+  <line x1="120" y1="350" x2="160" y2="350" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="115" y="353" text-anchor="end" font-size="10" fill="#4ade80">Ch1 IN</text>
+  <text x="165" y="353" text-anchor="start" font-size="10" fill="#93c5fd">17</text>
+  <!-- RLY 2 -->
+  <line x1="120" y1="380" x2="160" y2="380" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="115" y="383" text-anchor="end" font-size="10" fill="#4ade80">Ch2 IN</text>
+  <text x="165" y="383" text-anchor="start" font-size="10" fill="#93c5fd">16</text>
+  <!-- RLY 3 -->
+  <line x1="120" y1="410" x2="160" y2="410" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="115" y="413" text-anchor="end" font-size="10" fill="#4ade80">Ch3 IN</text>
+  <text x="165" y="413" text-anchor="start" font-size="10" fill="#93c5fd">14</text>
+  <!-- RLY 4 -->
+  <line x1="120" y1="440" x2="160" y2="440" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="115" y="443" text-anchor="end" font-size="10" fill="#4ade80">Ch4 IN</text>
+  <text x="165" y="443" text-anchor="start" font-size="10" fill="#93c5fd">27</text>
+
+
+  <!-- SPI Lines A -->
+  <!-- 3.3V -->
+  <line x1="300" y1="170" x2="360" y2="170" stroke="#e74c3c" stroke-width="1.5"/>
+  <text x="295" y="173" text-anchor="end" font-size="10" fill="#e74c3c">3V3</text>
+  <text x="365" y="173" text-anchor="start" font-size="10" fill="#e74c3c">VCC</text>
+  <!-- GND -->
+  <line x1="300" y1="200" x2="360" y2="200" stroke="#5a6270" stroke-width="1.5"/>
+  <text x="295" y="203" text-anchor="end" font-size="10" fill="#5a6270">GND</text>
+  <text x="365" y="203" text-anchor="start" font-size="10" fill="#5a6270">GND</text>
+  <!-- CS -->
+  <line x1="300" y1="230" x2="360" y2="230" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="295" y="233" text-anchor="end" font-size="10" fill="#a855f7">GPIO 5</text>
+  <text x="365" y="233" text-anchor="start" font-size="10" fill="#a855f7">CS</text>
+  <!-- SCK -->
+  <line x1="300" y1="260" x2="360" y2="260" stroke="#10b981" stroke-width="1.5"/>
+  <text x="295" y="263" text-anchor="end" font-size="10" fill="#10b981">GPIO 18</text>
+  <text x="365" y="263" text-anchor="start" font-size="10" fill="#10b981">SCK</text>
+  <!-- MISO -->
+  <line x1="300" y1="290" x2="360" y2="290" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="295" y="293" text-anchor="end" font-size="10" fill="#ec4899">GPIO 19</text>
+  <text x="365" y="293" text-anchor="start" font-size="10" fill="#ec4899">SO</text>
+  <!-- MOSI -->
+  <line x1="300" y1="320" x2="360" y2="320" stroke="#06b6d4" stroke-width="1.5"/>
+  <text x="295" y="323" text-anchor="end" font-size="10" fill="#06b6d4">GPIO 23</text>
+  <text x="365" y="323" text-anchor="start" font-size="10" fill="#06b6d4">SI</text>
+
+  <!-- ================= CAN BUS ================= -->
+  <!-- CAN H -->
+  <line x1="440" y1="200" x2="560" y2="200" stroke="#facc15" stroke-width="2.5"/>
+  <text x="500" y="195" text-anchor="middle" font-size="11" fill="#facc15" font-weight="bold">CAN H</text>
+  <text x="435" y="203" text-anchor="end" font-size="10" fill="#facc15">H</text>
+  <text x="565" y="203" text-anchor="start" font-size="10" fill="#facc15">H</text>
+  <!-- CAN L -->
+  <line x1="440" y1="250" x2="560" y2="250" stroke="#22c55e" stroke-width="2.5"/>
+  <text x="500" y="245" text-anchor="middle" font-size="11" fill="#22c55e" font-weight="bold">CAN L</text>
+  <text x="435" y="253" text-anchor="end" font-size="10" fill="#22c55e">L</text>
+  <text x="565" y="253" text-anchor="start" font-size="10" fill="#22c55e">L</text>
+
+
+  <!-- ================= BOARD B (REAR) ================= -->
+  <!-- MCP2515-B -->
+  <rect x="560" y="130" width="80" height="200" rx="4" fill="#1e1e2e" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="600" y="150" text-anchor="middle" font-size="12" fill="#f59e0b" font-weight="bold">MCP2515</text>
+
+  <!-- ESP32-B -->
+  <rect x="700" y="80" width="140" height="440" rx="6" fill="#162844" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="770" y="105" text-anchor="middle" font-size="14" fill="#3b82f6" font-weight="bold">ESP32 (Board B)</text>
+  <text x="770" y="120" text-anchor="middle" font-size="10" fill="#93c5fd">Rear</text>
+
+  <!-- Relays Block B -->
+  <rect x="880" y="100" width="100" height="160" rx="4" fill="#1a3a1a" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="930" y="120" text-anchor="middle" font-size="11" fill="#4ade80" font-weight="bold">Relay Module</text>
+
+  <!-- Extras Block B -->
+  <rect x="880" y="300" width="100" height="160" rx="4" fill="#1f2937" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="930" y="320" text-anchor="middle" font-size="11" fill="#d1d5db" font-weight="bold">Extras</text>
+
+  <!-- SPI Lines B -->
+  <!-- 3.3V -->
+  <line x1="640" y1="170" x2="700" y2="170" stroke="#e74c3c" stroke-width="1.5"/>
+  <text x="635" y="173" text-anchor="end" font-size="10" fill="#e74c3c">VCC</text>
+  <text x="705" y="173" text-anchor="start" font-size="10" fill="#e74c3c">3V3</text>
+  <!-- GND -->
+  <line x1="640" y1="200" x2="700" y2="200" stroke="#5a6270" stroke-width="1.5"/>
+  <text x="635" y="203" text-anchor="end" font-size="10" fill="#5a6270">GND</text>
+  <text x="705" y="203" text-anchor="start" font-size="10" fill="#5a6270">GND</text>
+  <!-- CS -->
+  <line x1="640" y1="230" x2="700" y2="230" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="635" y="233" text-anchor="end" font-size="10" fill="#a855f7">CS</text>
+  <text x="705" y="233" text-anchor="start" font-size="10" fill="#a855f7">GPIO 5</text>
+  <!-- SCK -->
+  <line x1="640" y1="260" x2="700" y2="260" stroke="#10b981" stroke-width="1.5"/>
+  <text x="635" y="263" text-anchor="end" font-size="10" fill="#10b981">SCK</text>
+  <text x="705" y="263" text-anchor="start" font-size="10" fill="#10b981">GPIO 18</text>
+  <!-- MISO -->
+  <line x1="640" y1="290" x2="700" y2="290" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="635" y="293" text-anchor="end" font-size="10" fill="#ec4899">SO</text>
+  <text x="705" y="293" text-anchor="start" font-size="10" fill="#ec4899">GPIO 19</text>
+  <!-- MOSI -->
+  <line x1="640" y1="320" x2="700" y2="320" stroke="#06b6d4" stroke-width="1.5"/>
+  <text x="635" y="323" text-anchor="end" font-size="10" fill="#06b6d4">SI</text>
+  <text x="705" y="323" text-anchor="start" font-size="10" fill="#06b6d4">GPIO 23</text>
+
+  <!-- Relays Lines B -->
+  <!-- RLY 1 -->
+  <line x1="840" y1="150" x2="880" y2="150" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="835" y="153" text-anchor="end" font-size="10" fill="#93c5fd">17</text>
+  <text x="885" y="153" text-anchor="start" font-size="10" fill="#4ade80">Ch1 IN</text>
+  <!-- RLY 2 -->
+  <line x1="840" y1="180" x2="880" y2="180" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="835" y="183" text-anchor="end" font-size="10" fill="#93c5fd">16</text>
+  <text x="885" y="183" text-anchor="start" font-size="10" fill="#4ade80">Ch2 IN</text>
+  <!-- RLY 3 -->
+  <line x1="840" y1="210" x2="880" y2="210" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="835" y="213" text-anchor="end" font-size="10" fill="#93c5fd">14</text>
+  <text x="885" y="213" text-anchor="start" font-size="10" fill="#4ade80">Ch3 IN</text>
+  <!-- RLY 4 -->
+  <line x1="840" y1="240" x2="880" y2="240" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="835" y="243" text-anchor="end" font-size="10" fill="#93c5fd">27</text>
+  <text x="885" y="243" text-anchor="start" font-size="10" fill="#4ade80">Ch4 IN</text>
+
+  <!-- Extras Lines B -->
+  <!-- Buzzer -->
+  <line x1="840" y1="350" x2="880" y2="350" stroke="#f87171" stroke-width="1.5"/>
+  <text x="835" y="353" text-anchor="end" font-size="10" fill="#93c5fd">13</text>
+  <text x="885" y="353" text-anchor="start" font-size="10" fill="#f87171">Buzzer</text>
+  <!-- Button -->
+  <line x1="840" y1="400" x2="880" y2="400" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="835" y="403" text-anchor="end" font-size="10" fill="#93c5fd">26</text>
+  <text x="885" y="403" text-anchor="start" font-size="10" fill="#9ca3af">Btn (Rear)</text>
+
+  <!-- Important Notes -->
+  <rect x="300" y="450" width="400" height="70" rx="4" fill="#111827" stroke="#f59e0b" stroke-width="1"/>
+  <text x="500" y="470" text-anchor="middle" font-size="12" fill="#f59e0b" font-weight="bold">WARNING: PARASITIC POWERING</text>
+  <text x="500" y="488" text-anchor="middle" font-size="10" fill="#9ca3af">NEVER connect SPI pins without VCC and GND securely connected first.</text>
+  <text x="500" y="502" text-anchor="middle" font-size="10" fill="#9ca3af">A loose GND wire will burn out ESP32 data pins instantly!</text>
+
+</svg>
