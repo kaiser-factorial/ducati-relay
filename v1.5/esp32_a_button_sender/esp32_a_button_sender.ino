@@ -1,8 +1,7 @@
 // ESP32 "A" v1.5 — reads FOUR pushbuttons, drives a local relay per button,
 // and broadcasts each button's state over CAN via an MCP2515 SPI CAN controller
 // module (Adafruit MCP2515 library). Also listens for CAN 0x110, the
-// potentiometer-selection broadcast from ESP-B, and logs which relay ESP-B is
-// currently pointing at with its pot.
+// brake-state broadcast from ESP-B, and logs whether the brake is applied.
 //
 // Library: install "Adafruit MCP2515" via Arduino Library Manager
 // (arduino-cli lib install "Adafruit MCP2515")
@@ -38,7 +37,7 @@
 #define RELAY_ACTIVE_LOW    false
 #define HEARTBEAT_PERIOD_MS 2000
 
-#define CAN_ID_POT_SELECT   0x110   // ESP-B broadcasts its pot-selected relay here
+#define CAN_ID_BRAKE        0x110   // ESP-B broadcasts brake state here
 
 // #define MCP2515_CRYSTAL_8MHZ
 
@@ -64,7 +63,7 @@ const int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 unsigned long lastHeartbeat = 0;
 unsigned long sendCount     = 0;
 unsigned long sendFailCount = 0;
-int8_t        lastPotRelay  = -1;
+bool          brakeOn       = false;
 
 void setRelay(Channel &ch, bool on) {
   ch.relayOn = on;
@@ -112,7 +111,7 @@ void setup() {
   mcp.dumpRegisters(Serial);
   Serial.println("-----------------------------");
 
-  Serial.println("Ready. Buttons drive local relays + send CAN; watching 0x110 from ESP-B.");
+  Serial.println("Ready. Buttons drive local relays + send CAN; watching brake state from ESP-B.");
   Serial.println();
 }
 
@@ -163,12 +162,12 @@ void loop() {
       if (i == 0) firstByte = (uint8_t)b;
     }
 
-    if ((uint32_t)id == CAN_ID_POT_SELECT && !mcp.packetRtr()) {
-      int8_t relayIndex = (int8_t)firstByte;  // 0-3
-      if (relayIndex != lastPotRelay) {
-        lastPotRelay = relayIndex;
-        Serial.printf("[%8lu ms] POT from ESP-B: relay %d selected (Ch%d)\n",
-                      millis(), relayIndex, relayIndex + 1);
+    if ((uint32_t)id == CAN_ID_BRAKE && !mcp.packetRtr()) {
+      bool applied = (firstByte == 0x01);
+      if (applied != brakeOn) {
+        brakeOn = applied;
+        Serial.printf("[%8lu ms] BRAKE from ESP-B: %s\n",
+                      millis(), applied ? "APPLIED" : "released");
       }
     } else {
       Serial.printf("[%8lu ms] RX id=0x%lX (ignored)\n", millis(), id);
@@ -178,9 +177,9 @@ void loop() {
   // --- Heartbeat ---
   if (millis() - lastHeartbeat >= HEARTBEAT_PERIOD_MS) {
     lastHeartbeat = millis();
-    Serial.printf("[%8lu ms] heartbeat — sends ok: %lu | failed: %lu | pot relay: %s |",
+    Serial.printf("[%8lu ms] heartbeat — sends ok: %lu | failed: %lu | brake: %s |",
                   millis(), sendCount - sendFailCount, sendFailCount,
-                  lastPotRelay >= 0 ? String(lastPotRelay + 1).c_str() : "none");
+                  brakeOn ? "APPLIED" : "released");
     for (int i = 0; i < NUM_CHANNELS; i++) {
       Serial.printf(" %s btn=%s relay=%s",
                     channels[i].name,

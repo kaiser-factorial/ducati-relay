@@ -147,9 +147,7 @@ ducati_relay/v1/
 
 Builds on v1. Both boards gain a 4th relay channel. ESP-A gains 4 local relay outputs (one
 per button, fired directly on press in addition to sending the CAN command to ESP-B). ESP-B
-gains a potentiometer whose position selects which relay is locally active and broadcasts
-the selection over CAN 0x110 to ESP-A. A relay on ESP-B is active if the CAN button command
-says ON **or** the pot is currently pointing at it — both controls work simultaneously.
+gains a brake switch input whose state is broadcast over CAN 0x110 to ESP-A.
 
 ### CAN Protocol (v1.5)
 
@@ -159,7 +157,7 @@ says ON **or** the pot is currently pointing at it — both controls work simult
 | 0x101 | ESP-A → ESP-B | Button/Relay 2 |
 | 0x102 | ESP-A → ESP-B | Button/Relay 3 |
 | 0x103 | ESP-A → ESP-B | Button/Relay 4 |
-| 0x110 | ESP-B → ESP-A | Pot selection (1 byte = relay index 0–3) |
+| 0x110 | ESP-B → ESP-A | Brake state (0x01=applied, 0x00=released) |
 
 ### Board Pin Mapping
 
@@ -174,12 +172,12 @@ Pin order matches the physical ESP32 DevKit v1 header, top → bottom on each si
 | 2 | EN | — | — |
 | 3 | GPIO 36 (SVP) | — *input only* | — *input only* |
 | 4 | GPIO 39 (SVN) | — *input only* | — *input only* |
-| 5 | GPIO 34 | — *input only, no internal pull-up* | potentiometer wiper *input only, no internal pull-up* |
+| 5 | GPIO 34 | — *input only, no internal pull-up* | — *input only, no internal pull-up* |
 | 6 | GPIO 35 | — *input only, no internal pull-up* | — *input only, no internal pull-up* |
 | 7 | GPIO 32 | Button 1 | Relay 2 (CAN 0x101) |
 | 8 | GPIO 33 | Button 2 | Relay 3 (CAN 0x102) |
 | 9 | GPIO 25 | Button 3 | Relay 4 (CAN 0x103) |
-| 10 | GPIO 26 | Button 4 | — |
+| 10 | GPIO 26 | Button 4 | brake switch |
 | 11 | GPIO 27 | Relay 4 | — |
 | 12 | GPIO 14 | Relay 3 | — |
 | 13 | GPIO 12 | — *strapping — HIGH at boot = 1.8V flash voltage* | — *strapping — HIGH at boot = 1.8V flash voltage* |
@@ -396,7 +394,7 @@ ducati_relay/
 │   ├── esp32_a_button_sender/
 │   │   └── esp32_a_button_sender.ino   ← 4 buttons + 4 local relays; CAN sender + pot rx
 │   └── esp32_b_relay_receiver/
-│       └── esp32_b_relay_receiver.ino  ← 4 relays + potentiometer selector; CAN rx + pot tx
+│       └── esp32_b_relay_receiver.ino  ← 4 relays + brake switch input; CAN rx + brake tx
 └── v2/
     ├── esp32_a_bike/
     │   └── esp32_a_bike.ino            ← bike: 7 buttons, 4 front relays, ECU telemetry rx
