@@ -180,8 +180,8 @@ Pin order matches the physical ESP32 DevKit v1 header, top → bottom on each si
 | 8 | GPIO 33 | Button 2 | Relay 3 (CAN 0x102) |
 | 9 | GPIO 25 | Button 3 | Relay 4 (CAN 0x103) |
 | 10 | GPIO 26 | Button 4 | — |
-| 11 | GPIO 27 | Relay 1 | — |
-| 12 | GPIO 14 | Relay 2 | — |
+| 11 | GPIO 27 | Relay 4 | — |
+| 12 | GPIO 14 | Relay 3 | — |
 | 13 | GPIO 12 | — *strapping — HIGH at boot = 1.8V flash voltage* | — *strapping — HIGH at boot = 1.8V flash voltage* |
 | 14 | GND | common GND | common GND |
 | 15 | GPIO 13 | — | — |
@@ -204,8 +204,8 @@ Pin order matches the physical ESP32 DevKit v1 header, top → bottom on each si
 | 8 | GPIO 19 | MCP2515 MISO | MCP2515 MISO |
 | 9 | GPIO 18 | MCP2515 SCK | MCP2515 SCK |
 | 10 | GPIO 5 | MCP2515 CS | MCP2515 CS |
-| 11 | GPIO 17 | Relay 4 | — |
-| 12 | GPIO 16 | Relay 3 | — |
+| 11 | GPIO 17 | Relay 1 | — |
+| 12 | GPIO 16 | Relay 2 | — |
 | 13 | GPIO 4 | — | Relay 1 (CAN 0x100) |
 | 14 | GPIO 0 | — *strapping — LOW at boot = download mode* | — *strapping — LOW at boot = download mode* |
 | 15 | GPIO 2 | — *strapping pin + onboard LED* | status LED *strapping pin + onboard LED* |
