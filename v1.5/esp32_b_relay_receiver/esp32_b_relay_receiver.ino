@@ -1,9 +1,5 @@
 // ESP32 "B" v1.5 — drives FOUR relays from CAN commands (Adafruit MCP2515 library)
-// and reads a potentiometer whose position selects which relay is active locally.
-// The pot selection is broadcast over CAN so ESP-A can track it.
-//
-// Relay active = (CAN button command from ESP-A says ON)  OR  (pot is pointing at it).
-// Both controls work simultaneously and independently.
+// and reads a brake switch whose state is broadcast over CAN to ESP-A.
 //
 // Library: install "Adafruit MCP2515" via Arduino Library Manager
 // (arduino-cli lib install "Adafruit MCP2515")
@@ -14,16 +10,16 @@
 //   Relay 3: signal → GPIO 33  (CAN ID 0x102)
 //   Relay 4: signal → GPIO 25  (CAN ID 0x103)
 //
-// Potentiometer wiring:
-//   Wiper (middle leg) → GPIO 34 (ADC input-only pin, no pull-up conflict)
-//   One outer leg → 3.3V, other outer leg → GND
-//   Pot position maps to 4 equal zones → selects Relay 1, 2, 3, or 4
+// Brake switch wiring (same as a pushbutton):
+//   One leg → GPIO 26, other leg → GND; internal pull-up, no external resistor needed.
+//   Brake applied = pin LOW; released = pin HIGH.
+//   Broadcasts CAN 0x110: 0x01 = applied, 0x00 = released.
 //
 // MCP2515 wiring (same VSPI pins as v1):
 //   VCC → 3.3V, GND → GND
 //   SCK → GPIO 18, MISO → GPIO 19, MOSI → GPIO 23, CS → GPIO 5
 //
-// Status LED (GPIO 2, onboard LED): indicates the lowest-numbered active relay.
+// Status LED (GPIO 2, onboard): indicates the lowest-numbered active relay.
 //   Relay 1 active → solid on
 //   Relay 2 active → slow flash  (500 ms half-period)
 //   Relay 3 active → rapid flash (100 ms half-period)
@@ -45,9 +41,8 @@
 #define STATUS_LED_PIN         2
 #define STATUS_LED_ACTIVE_LOW  false
 
-#define POT_PIN              34     // ADC1 CH6 — input-only, no digital drive issues
-#define POT_BROADCAST_MS     100    // send CAN 0x110 when pot zone changes; also re-send every N ms
-#define CAN_ID_POT_SELECT    0x110  // this board broadcasts its pot selection here
+#define BRAKE_PIN            26
+#define CAN_ID_BRAKE         0x110   // ESP-B broadcasts brake state here
 
 // #define MCP2515_CRYSTAL_8MHZ
 
@@ -57,60 +52,33 @@ struct RelayChannel {
   const char *name;
   uint8_t     pin;
   uint32_t    canId;
-  bool        btnOn;   // ON commanded by ESP-A button press
-  bool        potOn;   // ON because pot is currently pointing here
+  bool        isOn;
 };
 
 RelayChannel channels[] = {
-  { "Relay 1", 4,  0x100, false, false },
-  { "Relay 2", 32, 0x101, false, false },
-  { "Relay 3", 33, 0x102, false, false },
-  { "Relay 4", 25, 0x103, false, false },
+  { "Relay 1", 4,  0x100, false },
+  { "Relay 2", 32, 0x101, false },
+  { "Relay 3", 33, 0x102, false },
+  { "Relay 4", 25, 0x103, false },
 };
 const int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 
-// Status LED blink half-period per channel (ms); 0 = solid on.
 const unsigned long LED_HALF_PERIOD_MS[] = { 0, 500, 100, 50 };
 
-unsigned long lastHeartbeat    = 0;
-unsigned long lastPotBroadcast = 0;
-unsigned long packetsSeen      = 0;
-unsigned long packetsMatched   = 0;
-int           lastLedChannel   = -2;
-int8_t        lastPotZone      = -1;
+unsigned long lastHeartbeat  = 0;
+unsigned long packetsSeen    = 0;
+unsigned long packetsMatched = 0;
+int           lastLedChannel = -2;
+bool          brakeLastState = HIGH;
+bool          brakeOn        = false;
 
-void applyRelay(RelayChannel &ch) {
-  bool on = ch.btnOn || ch.potOn;
+void setRelay(RelayChannel &ch, bool on) {
+  ch.isOn = on;
   bool level = RELAY_ACTIVE_LOW ? !on : on;
   digitalWrite(ch.pin, level ? HIGH : LOW);
-}
-
-void setRelayBtn(RelayChannel &ch, bool on) {
-  bool wasActive = ch.btnOn || ch.potOn;
-  ch.btnOn = on;
-  bool isActive = ch.btnOn || ch.potOn;
-  applyRelay(ch);
-  if (wasActive != isActive) {
-    Serial.printf("[%8lu ms]     >>> %s -> %s (btn=%s pot=%s, pin %d %s)\n",
-                  millis(), ch.name, isActive ? "ON " : "OFF",
-                  ch.btnOn ? "ON" : "OFF", ch.potOn ? "ON" : "OFF",
-                  ch.pin, isActive ? "HIGH" : "LOW");
-  }
-}
-
-void setRelayPot(int zoneIndex) {
-  for (int i = 0; i < NUM_CHANNELS; i++) {
-    bool wasActive = channels[i].btnOn || channels[i].potOn;
-    channels[i].potOn = (i == zoneIndex);
-    bool isActive = channels[i].btnOn || channels[i].potOn;
-    applyRelay(channels[i]);
-    if (wasActive != isActive) {
-      Serial.printf("[%8lu ms]     >>> %s -> %s (btn=%s pot=%s, pin %d %s)\n",
-                    millis(), channels[i].name, isActive ? "ON " : "OFF",
-                    channels[i].btnOn ? "ON" : "OFF", channels[i].potOn ? "ON" : "OFF",
-                    channels[i].pin, isActive ? "HIGH" : "LOW");
-    }
-  }
+  Serial.printf("[%8lu ms]     >>> %s -> %s (pin %d %s)\n",
+                millis(), ch.name, on ? "ON " : "OFF",
+                ch.pin, level ? "HIGH" : "LOW");
 }
 
 void writeStatusLed(bool lit) {
@@ -120,7 +88,7 @@ void writeStatusLed(bool lit) {
 void updateStatusLed() {
   int active = -1;
   for (int i = 0; i < NUM_CHANNELS; i++) {
-    if (channels[i].btnOn || channels[i].potOn) { active = i; break; }
+    if (channels[i].isOn) { active = i; break; }
   }
 
   if (active != lastLedChannel) {
@@ -149,18 +117,15 @@ int findChannel(uint32_t canId) {
   return -1;
 }
 
-// Read pot, return zone 0-3.
-int8_t readPotZone() {
-  int raw = analogRead(POT_PIN);   // 0-4095 (12-bit ADC)
-  return (int8_t)(raw / 1024);     // 0,1,2,3 (4096/4 = 1024 per zone)
-}
-
-void broadcastPotSelection(int8_t zone) {
-  mcp.beginPacket(CAN_ID_POT_SELECT);
-  mcp.write((uint8_t)zone);
+void sendBrakeState(bool applied) {
+  brakeOn = applied;
+  uint8_t payload = applied ? 0x01 : 0x00;
+  Serial.printf("[%8lu ms] BRAKE %s -> CAN 0x%03X data=0x%02X\n",
+                millis(), applied ? "APPLIED " : "RELEASED", CAN_ID_BRAKE, payload);
+  mcp.beginPacket(CAN_ID_BRAKE);
+  mcp.write(payload);
   int ok = mcp.endPacket();
-  Serial.printf("[%8lu ms] POT broadcast: zone=%d (Relay %d) -> CAN 0x%03X %s\n",
-                millis(), zone, zone + 1, CAN_ID_POT_SELECT, ok ? "OK" : "FAILED");
+  Serial.printf("[%8lu ms]     send %s\n", millis(), ok ? "OK" : "FAILED");
 }
 
 void setup() {
@@ -182,13 +147,17 @@ void setup() {
     Serial.printf("  %s: pin=%d  canId=0x%lX  LED=%s\n",
                   channels[i].name, channels[i].pin,
                   (unsigned long)channels[i].canId, pat);
-    applyRelay(channels[i]);
+    setRelay(channels[i], false);
   }
 
   pinMode(STATUS_LED_PIN, OUTPUT);
   writeStatusLed(false);
   Serial.printf("  Status LED: pin=%d\n", STATUS_LED_PIN);
-  Serial.printf("  Potentiometer: pin=%d  broadcast CAN ID=0x%03X\n", POT_PIN, CAN_ID_POT_SELECT);
+
+  pinMode(BRAKE_PIN, INPUT_PULLUP);
+  brakeLastState = digitalRead(BRAKE_PIN);
+  Serial.printf("  Brake switch: pin=%d  initial=%s\n",
+                BRAKE_PIN, brakeLastState == LOW ? "LOW (applied)" : "HIGH (released)");
 
 #ifdef MCP2515_CRYSTAL_8MHZ
   Serial.println("Setting MCP2515 clock frequency to 8 MHz");
@@ -209,31 +178,22 @@ void setup() {
   mcp.dumpRegisters(Serial);
   Serial.println("-----------------------------");
 
-  // Capture initial pot position and broadcast it.
-  lastPotZone = readPotZone();
-  setRelayPot(lastPotZone);
-  broadcastPotSelection(lastPotZone);
-
-  Serial.println("Receiver ready. Waiting for CAN packets + pot input...");
+  Serial.println("Receiver ready. Waiting for CAN packets + brake input...");
   Serial.println();
 }
 
 void loop() {
   updateStatusLed();
 
-  // --- Read potentiometer and update relay states on zone change ---
-  int8_t zone = readPotZone();
-  unsigned long now = millis();
-  bool zoneChanged = (zone != lastPotZone);
-  if (zoneChanged) {
-    lastPotZone = zone;
-    Serial.printf("[%8lu ms] POT zone changed -> %d (Relay %d)\n", now, zone, zone + 1);
-    setRelayPot(zone);
-  }
-  // Rebroadcast on zone change or periodically.
-  if (zoneChanged || (now - lastPotBroadcast >= POT_BROADCAST_MS)) {
-    broadcastPotSelection(lastPotZone);
-    lastPotBroadcast = now;
+  // --- Poll brake switch ---
+  bool cur = digitalRead(BRAKE_PIN);
+  if (cur != brakeLastState) {
+    delay(30); // debounce
+    cur = digitalRead(BRAKE_PIN);
+    if (cur != brakeLastState) {
+      brakeLastState = cur;
+      sendBrakeState(cur == LOW);
+    }
   }
 
   // --- Receive CAN frames from ESP-A ---
@@ -245,7 +205,7 @@ void loop() {
     int chIdx = findChannel((uint32_t)id);
 
     Serial.printf("[%8lu ms] RX #%lu: id=0x%lX (%s%s) len=%d",
-                  now, packetsSeen, id,
+                  millis(), packetsSeen, id,
                   mcp.packetExtended() ? "extended" : "standard",
                   rtr ? ", RTR" : "",
                   packetSize);
@@ -265,7 +225,7 @@ void loop() {
       if (chIdx >= 0) {
         packetsMatched++;
         Serial.printf("  <- MATCH (#%lu) -> %s\n", packetsMatched, channels[chIdx].name);
-        setRelayBtn(channels[chIdx], firstByte == 0x01);
+        setRelay(channels[chIdx], firstByte == 0x01);
       } else {
         Serial.printf("  (ignored — id 0x%lX not mapped)\n", id);
       }
@@ -273,16 +233,12 @@ void loop() {
   }
 
   // --- Heartbeat ---
-  if (now - lastHeartbeat >= HEARTBEAT_PERIOD_MS) {
-    lastHeartbeat = now;
-    Serial.printf("[%8lu ms] heartbeat — pkts seen: %lu | matched: %lu | pot zone: %d (Relay %d) | relays:",
-                  now, packetsSeen, packetsMatched, lastPotZone, lastPotZone + 1);
+  if (millis() - lastHeartbeat >= HEARTBEAT_PERIOD_MS) {
+    lastHeartbeat = millis();
+    Serial.printf("[%8lu ms] heartbeat — pkts seen: %lu | matched: %lu | brake: %s | relays:",
+                  millis(), packetsSeen, packetsMatched, brakeOn ? "APPLIED" : "released");
     for (int i = 0; i < NUM_CHANNELS; i++) {
-      bool active = channels[i].btnOn || channels[i].potOn;
-      Serial.printf(" %s=%s(btn=%s,pot=%s)",
-                    channels[i].name, active ? "ON " : "OFF",
-                    channels[i].btnOn ? "Y" : "N",
-                    channels[i].potOn ? "Y" : "N");
+      Serial.printf(" %s=%s", channels[i].name, channels[i].isOn ? "ON " : "OFF");
     }
     Serial.println();
   }
