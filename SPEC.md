@@ -145,19 +145,40 @@ ducati_relay/v1/
 
 ## Phase 1.5: Extended Practice Rig
 
-Builds on v1. Both boards gain a 4th relay channel. ESP-A gains 4 local relay outputs (one
-per button, fired directly on press in addition to sending the CAN command to ESP-B). ESP-B
-gains a brake switch input whose state is broadcast over CAN 0x110 to ESP-A.
+Builds on v1. The goal of this phase is to make cross-board CAN communication visible and
+tangible — modelling how an ECU would sit as the single source of truth in the middle.
+
+Key design choices:
+
+- **CAN is the single source of truth.** ESP-A relays do not fire on button press. They only
+  fire after ESP-B sends back a confirmation over CAN.
+- **Ch1 (GPIO 32) is one-way.** ESP-A sends 0x100 → ESP-B fires relay 1 + buzzer. No response.
+  ESP-A's Ch1 relay is instead driven by ESP-B's push button (0x110) — each board controls
+  something on the other board.
+- **Ch2–4 are request/response.** ESP-A sends a request → ESP-B fires its relay and sends a
+  confirmation back → ESP-A fires its local relay only on receipt of that confirmation.
+- **Onboard LED (GPIO 2) on each board** blinks briefly on every incoming CAN message, making
+  cross-board traffic visible at a glance.
+- **Passive piezo buzzer on ESP-B** (GPIO 13) beeps when relay 1 fires.
+- **SVG wiring diagrams** for both boards are included at the repo root:
+  `relay_wiring_front.svg` (ESP-A) and `relay_wiring_rear.svg` (ESP-B).
 
 ### CAN Protocol (v1.5)
 
+- **Baud rate:** 500 kbps
+- **Frame type:** standard (11-bit ID)
+- **Payload:** 1 byte — `0x01` = pressed/ON, `0x00` = released/OFF
+
 | CAN ID | Direction | Meaning |
 |--------|-----------|---------|
-| 0x100 | ESP-A → ESP-B | Button/Relay 1 (0x01=ON, 0x00=OFF) |
-| 0x101 | ESP-A → ESP-B | Button/Relay 2 |
-| 0x102 | ESP-A → ESP-B | Button/Relay 3 |
-| 0x103 | ESP-A → ESP-B | Button/Relay 4 |
-| 0x110 | ESP-B → ESP-A | Brake state (0x01=applied, 0x00=released) |
+| 0x100 | ESP-A → ESP-B | Ch1 button event (one-way; triggers relay 1 + buzzer on ESP-B) |
+| 0x101 | ESP-A → ESP-B | Ch2 button request |
+| 0x102 | ESP-A → ESP-B | Ch3 button request |
+| 0x103 | ESP-A → ESP-B | Ch4 button request |
+| 0x110 | ESP-B → ESP-A | ESP-B push button event (triggers Ch1 relay on ESP-A) |
+| 0x111 | ESP-B → ESP-A | Ch2 confirmation (mirrors request payload) |
+| 0x112 | ESP-B → ESP-A | Ch3 confirmation |
+| 0x113 | ESP-B → ESP-A | Ch4 confirmation |
 
 ### Board Pin Mapping
 
@@ -177,12 +198,12 @@ Pin order matches the physical ESP32 DevKit v1 header, top → bottom on each si
 | 7 | GPIO 32 | Button 1 | Relay 2 (CAN 0x101) |
 | 8 | GPIO 33 | Button 2 | Relay 3 (CAN 0x102) |
 | 9 | GPIO 25 | Button 3 | Relay 4 (CAN 0x103) |
-| 10 | GPIO 26 | Button 4 | brake switch |
+| 10 | GPIO 26 | Button 4 | push button (sends CAN 0x110) |
 | 11 | GPIO 27 | Relay 4 | — |
 | 12 | GPIO 14 | Relay 3 | — |
 | 13 | GPIO 12 | — *strapping — HIGH at boot = 1.8V flash voltage* | — *strapping — HIGH at boot = 1.8V flash voltage* |
 | 14 | GND | common GND | common GND |
-| 15 | GPIO 13 | — | — |
+| 15 | GPIO 13 | — | buzzer (piezo signal) |
 | 16 | GPIO 9 (SD2) | — *internal flash — do not use* | — *internal flash — do not use* |
 | 17 | GPIO 10 (SD3) | — *internal flash — do not use* | — *internal flash — do not use* |
 | 18 | GPIO 11 (CMD) | — *internal flash — do not use* | — *internal flash — do not use* |
@@ -206,7 +227,7 @@ Pin order matches the physical ESP32 DevKit v1 header, top → bottom on each si
 | 12 | GPIO 16 | Relay 2 | — |
 | 13 | GPIO 4 | — | Relay 1 (CAN 0x100) |
 | 14 | GPIO 0 | — *strapping — LOW at boot = download mode* | — *strapping — LOW at boot = download mode* |
-| 15 | GPIO 2 | — *strapping pin + onboard LED* | status LED *strapping pin + onboard LED* |
+| 15 | GPIO 2 | CAN receive LED *strapping pin + onboard LED* | CAN receive LED *strapping pin + onboard LED* |
 | 16 | GPIO 15 | — *strapping — LOW at boot silences UART log* | — *strapping — LOW at boot silences UART log* |
 | 17 | GPIO 8 (SD1) | — *internal flash — do not use* | — *internal flash — do not use* |
 | 18 | GPIO 7 (SD0) | — *internal flash — do not use* | — *internal flash — do not use* |
@@ -380,6 +401,64 @@ in the rusEFI repo.
 
 ---
 
+## Build & Flash (arduino-cli)
+
+### First-time setup
+
+```bash
+# Install ESP32 platform
+arduino-cli core update-index
+arduino-cli core install esp32:esp32
+
+# Install CAN library
+arduino-cli lib install "Adafruit MCP2515"
+```
+
+### Find the board's port
+
+Plug in the ESP32, then:
+
+```bash
+arduino-cli board list
+```
+
+Look for `/dev/cu.usbserial-XXXX` or `/dev/cu.SLAB_USBtoUART` on Mac. Run before and after
+plugging in if unsure which port is the board.
+
+### Compile
+
+```bash
+arduino-cli compile --fqbn esp32:esp32:esp32 v1.5/esp32_a_button_sender
+arduino-cli compile --fqbn esp32:esp32:esp32 v1.5/esp32_b_relay_receiver
+```
+
+### Upload
+
+```bash
+arduino-cli upload -p /dev/cu.usbserial-XXXX --fqbn esp32:esp32:esp32 v1.5/esp32_a_button_sender
+```
+
+### Monitor serial output
+
+```bash
+arduino-cli monitor -p /dev/cu.usbserial-XXXX --config baudrate=115200
+```
+
+`Ctrl+C` to exit. Both sketches boot at 115200 baud and print a banner, register dump,
+per-event logs, and a 2-second heartbeat.
+
+### Compile + upload in one step
+
+```bash
+arduino-cli compile --fqbn esp32:esp32:esp32 v1.5/esp32_a_button_sender && \
+arduino-cli upload -p /dev/cu.usbserial-XXXX --fqbn esp32:esp32:esp32 v1.5/esp32_a_button_sender
+```
+
+> **Note:** The FQBN `esp32:esp32:esp32` targets the standard 30-pin ESP32 DevKit v1. If
+> `board list` shows a different variant name, adjust accordingly.
+
+---
+
 ## Repository Layout
 
 ```
@@ -392,9 +471,11 @@ ducati_relay/
 │       └── esp32_b_relay_receiver.ino  ← practice rig: 3-relay CAN receiver + status LED
 ├── v1.5/
 │   ├── esp32_a_button_sender/
-│   │   └── esp32_a_button_sender.ino   ← 4 buttons + 4 local relays; CAN sender + pot rx
+│   │   └── esp32_a_button_sender.ino   ← 4 buttons; relays fire on CAN response from ESP-B
 │   └── esp32_b_relay_receiver/
-│       └── esp32_b_relay_receiver.ino  ← 4 relays + brake switch input; CAN rx + brake tx
+│       └── esp32_b_relay_receiver.ino  ← 4 relays + push button + piezo buzzer; request/response CAN
+├── relay_wiring_front.svg              ← ESP-A relay load wiring diagram
+├── relay_wiring_rear.svg               ← ESP-B relay load wiring diagram
 └── v2/
     ├── esp32_a_bike/
     │   └── esp32_a_bike.ino            ← bike: 7 buttons, 4 front relays, ECU telemetry rx
