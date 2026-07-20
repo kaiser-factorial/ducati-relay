@@ -1,0 +1,22 @@
+{
+  "createdAt" : "2026-07-20T00:00:00Z",
+  "exchangeDurationSeconds" : 0,
+  "firstRequest" : {
+    "dataHex" : "",
+    "identifier" : 1639,
+    "timestamp" : 0
+  },
+  "firstResponse" : {
+    "dataHex" : "",
+    "identifier" : 2017,
+    "timestamp" : 0
+  },
+  "formatVersion" : 1,
+  "liveFlashingEnabled" : false,
+  "requestFrameCount" : 0,
+  "requestIdentifier" : 1639,
+  "responseFrameCount" : 0,
+  "responseIdentifier" : 2017,
+  "sourceCapture" : "awaiting Route 1 openblt_exchange.log",
+  "validationState" : "awaiting-route1-capture"
+}
