@@ -4,3 +4,4 @@ sample.txt
 
 # Claude Code worktrees (must never be committed as gitlinks)
 .claude/worktrees/
+.env
