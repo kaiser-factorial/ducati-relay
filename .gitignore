@@ -5,3 +5,4 @@ sample.txt
 # Claude Code worktrees (must never be committed as gitlinks)
 .claude/worktrees/
 .env
+v6.3_temperature_sensor/wifi_config.h
