@@ -5,12 +5,14 @@
     TK12 NTC thermistor Signal -> GPIO 6
     TK04 push button Signal    -> GPIO 37
 
-  Press the button once to take one temperature reading. Results are printed
-  to Serial Monitor at 115200 baud.
+  Press the button or send "r" / "read" over Serial to take one temperature
+  reading. Results are printed to Serial Monitor at 115200 baud.
 */
 
 #include <Arduino.h>
+#include <ctype.h>
 #include <math.h>
+#include <string.h>
 
 namespace {
 
@@ -21,6 +23,8 @@ constexpr uint16_t ADC_MAX = 4095;
 constexpr uint8_t SAMPLE_COUNT = 24;
 constexpr uint16_t SAMPLE_INTERVAL_MS = 4;
 constexpr uint16_t DEBOUNCE_MS = 45;
+constexpr uint16_t SERIAL_COMMAND_IDLE_MS = 120;
+constexpr size_t SERIAL_COMMAND_CAPACITY = 16;
 
 // TK12 thermistor circuit values documented by Lonely Binary.
 constexpr float SERIES_RESISTOR_OHMS = 10000.0F;
@@ -33,6 +37,9 @@ bool buttonStableState = LOW;
 bool buttonLastSample = LOW;
 uint32_t buttonChangedAtMs = 0;
 uint32_t readingNumber = 0;
+char serialCommand[SERIAL_COMMAND_CAPACITY]{};
+size_t serialCommandLength = 0;
+uint32_t serialLastByteAtMs = 0;
 
 uint16_t readAveragedAdc() {
   uint32_t total = 0;
@@ -91,6 +98,49 @@ void takeAndPrintReading() {
   Serial.println(" F");
 }
 
+void runSerialCommand() {
+  if (serialCommandLength == 0) return;
+  serialCommand[serialCommandLength] = '\0';
+
+  if (strcmp(serialCommand, "r") == 0 || strcmp(serialCommand, "read") == 0) {
+    takeAndPrintReading();
+  } else if (strcmp(serialCommand, "h") == 0 || strcmp(serialCommand, "help") == 0) {
+    Serial.println("Commands: r or read = take a temperature reading");
+  } else {
+    Serial.print("Unknown command: ");
+    Serial.println(serialCommand);
+    Serial.println("Send r to take a reading, or h for help.");
+  }
+
+  serialCommandLength = 0;
+}
+
+void handleSerialInput(uint32_t now) {
+  while (Serial.available() > 0) {
+    const char incoming = static_cast<char>(Serial.read());
+    serialLastByteAtMs = now;
+
+    if (incoming == '\r' || incoming == '\n') {
+      runSerialCommand();
+      continue;
+    }
+    if (isspace(static_cast<unsigned char>(incoming))) continue;
+
+    if (serialCommandLength < SERIAL_COMMAND_CAPACITY - 1) {
+      serialCommand[serialCommandLength++] =
+          static_cast<char>(tolower(static_cast<unsigned char>(incoming)));
+    } else {
+      serialCommandLength = 0;
+      Serial.println("Serial command too long. Send r to take a reading.");
+    }
+  }
+
+  // Also supports Serial Monitor with "No line ending" selected.
+  if (serialCommandLength > 0 && now - serialLastByteAtMs >= SERIAL_COMMAND_IDLE_MS) {
+    runSerialCommand();
+  }
+}
+
 }  // namespace
 
 void setup() {
@@ -102,12 +152,14 @@ void setup() {
 
   delay(300);
   Serial.println("Ducati temperature sensor ready.");
-  Serial.println("Press the TinkerBlock button to take a reading.");
+  Serial.println("Press the TinkerBlock button or send r to take a reading.");
 }
 
 void loop() {
   const bool sample = digitalRead(BUTTON_PIN) == HIGH;
   const uint32_t now = millis();
+
+  handleSerialInput(now);
 
   if (sample != buttonLastSample) {
     buttonLastSample = sample;
