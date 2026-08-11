@@ -27,6 +27,8 @@ constexpr uint8_t BUTTON_PIN = 37;
 constexpr char DEVICE_NAME[] = "Ducati Temperature Sensor";
 constexpr char SERVICE_UUID[] = "7b8f2b10-3a42-4d4e-9fd4-8b5b86d8a101";
 constexpr char READING_UUID[] = "7b8f2b11-3a42-4d4e-9fd4-8b5b86d8a101";
+constexpr char COMMAND_UUID[] = "7b8f2b12-3a42-4d4e-9fd4-8b5b86d8a101";
+constexpr uint8_t COMMAND_TAKE_READING = 0x01;
 
 constexpr uint16_t ADC_MAX = 4095;
 constexpr uint8_t SAMPLE_COUNT = 24;
@@ -58,6 +60,7 @@ bool buttonStableState = LOW;
 bool buttonLastSample = LOW;
 uint32_t buttonChangedAtMs = 0;
 uint16_t readingSequence = 0;
+volatile bool measurementRequested = false;
 
 class SensorServerCallbacks : public BLEServerCallbacks {
  public:
@@ -68,6 +71,17 @@ class SensorServerCallbacks : public BLEServerCallbacks {
   void onDisconnect(BLEServer* server) override {
     Serial.println("Browser disconnected; advertising again.");
     BLEDevice::startAdvertising();
+  }
+};
+
+class SensorCommandCallbacks : public BLECharacteristicCallbacks {
+ public:
+  void onWrite(BLECharacteristic* characteristic) override {
+    const String command = characteristic->getValue();
+    if (command.length() > 0 &&
+        static_cast<uint8_t>(command[0]) == COMMAND_TAKE_READING) {
+      measurementRequested = true;
+    }
   }
 };
 
@@ -145,6 +159,9 @@ void configureBluetooth() {
       READING_UUID,
       BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   readingCharacteristic->addDescriptor(new BLE2902());
+  BLECharacteristic* commandCharacteristic = service->createCharacteristic(
+      COMMAND_UUID, BLECharacteristic::PROPERTY_WRITE);
+  commandCharacteristic->setCallbacks(new SensorCommandCallbacks());
 
   const SensorPacket waitingPacket{1, 0, 0, 0, 0, 0};
   readingCharacteristic->setValue(
@@ -169,12 +186,17 @@ void setup() {
 
   delay(300);
   Serial.println("Ducati temperature sensor v6.2 ready.");
-  Serial.println("Open WearabLLM > Sensor, connect, then press the button.");
+  Serial.println("Connect in WearabLLM, then press either Take reading or the physical button.");
 }
 
 void loop() {
   const bool sample = digitalRead(BUTTON_PIN) == HIGH;
   const uint32_t now = millis();
+
+  if (measurementRequested) {
+    measurementRequested = false;
+    publishReading();
+  }
 
   if (sample != buttonLastSample) {
     buttonLastSample = sample;
