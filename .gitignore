@@ -6,3 +6,4 @@ sample.txt
 .claude/worktrees/
 .env
 v6.3_temperature_sensor/wifi_config.h
+v6.4_sensor_hub/wifi_config.h
