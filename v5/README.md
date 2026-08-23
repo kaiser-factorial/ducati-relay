@@ -8,6 +8,14 @@ The two firmware projects remain in their own directories:
 - [USB CAN sender](../v5_usb_can_sender/v5_usb_can_sender.ino)
 - [Receiver-specific notes](../v5_rear_can/README.md)
 - [Sender-specific notes](../v5_usb_can_sender/README.md)
+- [rusEFI nano CAN flasher package](../v5_can_flasher/README.md) — repurposes the USB sender
+  hardware as a bidirectional Linux SLCAN adapter, runs OpenBLT, and captures the exchange
+- [Native macOS updater foundation](../v5_macos_updater/README.md) — validates firmware, imports
+  Route 1 captures, talks SLCAN directly, and keeps live XCP programming safety-locked
+- [v7 serial CAN terminal](../v7_terminal_can/README.md) — sends arbitrary standard or extended
+  classic-CAN frames from a human-readable serial console and logs received traffic
+- [v7.2 ESP32-S3 native-USB CAN terminal](../v7_2_terminal_can_s3/README.md) — uses USB CDC,
+  compact `123#DEADBEEF` commands, larger CAN queues, and S3-safe default GPIOs
 
 ## Current working configuration
 
